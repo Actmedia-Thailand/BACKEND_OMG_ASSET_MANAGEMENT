@@ -7,7 +7,7 @@ VENV = .venv
 ACTIVATE = source $(VENV)/Scripts/activate
 
 # Command to run uvicorn server
-RUN_UVICORN = uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log
+RUN_UVICORN = uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log --reload
 
 # Default target to set up environment and run the server
 run:
