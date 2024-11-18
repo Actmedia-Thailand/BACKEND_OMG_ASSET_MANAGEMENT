@@ -3,8 +3,12 @@
 # Path to the virtual environment
 VENV = .venv
 
-# Activate the virtual environment
-ACTIVATE = source $(VENV)/Scripts/activate
+# Detect OS and set activation path
+ifeq ($(OS), Windows_NT) # Windows
+	ACTIVATE = source $(VENV)/Scripts/activate
+else # macOS/Linux
+	ACTIVATE = source $(VENV)/bin/activate
+endif
 
 # Command to run uvicorn server
 RUN_UVICORN = uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log --reload
@@ -19,4 +23,4 @@ install:
 
 # Create a new virtual environment (if .venv does not exist)
 create-venv:
-	python -m venv .venv
+	python3 -m venv $(VENV)
