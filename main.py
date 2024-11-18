@@ -2,7 +2,7 @@ from fastapi import FastAPI, HTTPException
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from typing import List, Dict
+from typing import List, Dict, Any
 
 # ติดตั้ง Google Sheets API credentials
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -22,7 +22,7 @@ SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  # แทนท�
 SHEET_RANGE = 'Sheet1'  # แทนที่ด้วยชื่อ sheet และ range ที่ต้องการใช้งาน
 
 # อ่านข้อมูลจาก Google Sheets
-@app.get("/items", response_model=List[Dict[str, str]])#Specifies that the response model will be a List of Dict with string keys and values.
+@app.get("/items", response_model=List[Dict[Any, Any]])#Specifies that the response model will be a List of Dict with string keys and values.
 async def read_items():
     try:
         sheets = get_google_sheets_service()
@@ -36,7 +36,7 @@ async def read_items():
 
 # เพิ่มข้อมูลใน Google Sheets
 @app.post("/items")
-async def create_item(item: Dict[str, str]):
+async def create_item(item: Dict[str, Any]):
     try:
         sheets = get_google_sheets_service()
         values = [[value for value in item.values()]]
