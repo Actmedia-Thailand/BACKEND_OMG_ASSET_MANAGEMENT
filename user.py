@@ -262,18 +262,38 @@ async def login(user: Dict[str, Any]):
         values = result.get('values', [])
         if not values:
             raise HTTPException(status_code=404, detail="No data found")
-        headers = values[0]
-        for row in values[1:]:
+        
+        headers = values[0]  # ใช้ row แรกเป็น headers
+        for row in values[1:]:  # เริ่มจาก row ที่ 2
             user_data = dict(zip(headers, [convert_value(value) for value in row]))
             if user_data.get("username") == user["username"]:
+                # ตรวจสอบ password
                 if not verify_password(user["password"], user_data.get("password")):
                     raise HTTPException(status_code=401, detail="Invalid password")
                 
-                token = create_access_token(data={"sub": user["username"]})
-                return {"access_token": token, "token_type": "bearer"}
+                # สร้าง JWT token
+                token = create_access_token(data={"sub": user_data["id"]})
+                
+                # กำหนด response fields
+                response_user = {
+                    "id": user_data.get("id"),
+                    "username": user_data.get("username"),
+                    "name": user_data.get("name"),
+                    "department": user_data.get("department"),
+                    "position": user_data.get("position"),
+                    "permission": user_data.get("permission")
+                }
+                
+                return {
+                    "access_token": token,
+                    "user": response_user,
+                    "token_type": "bearer"
+                }
+        
         raise HTTPException(status_code=404, detail="User not found")
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
+
 
 # Protected Route Example
 @router.get("/protected")
