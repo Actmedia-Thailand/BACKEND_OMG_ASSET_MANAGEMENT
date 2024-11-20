@@ -1,23 +1,21 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
+from fastapi.security import OAuth2PasswordBearer
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from typing import List, Dict, Any
 from datetime import datetime, timedelta
+from typing import List, Dict, Any
 from uuid import uuid4
 import bcrypt
 import jwt
-from fastapi.security import OAuth2PasswordBearer
-from fastapi import Depends
 
-# Configuration
+# === Configuration ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'
 USER_SHEET_RANGE = 'User'
 
-# JWT Config
-SECRET_KEY = "omgthailand"  # ควรเก็บไว้ใน ENV
+SECRET_KEY = "omgthailand"  # ควรเก็บใน ENV
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -25,21 +23,21 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 router = APIRouter()
 
-# Helper Functions
+# === Helper Functions ===
+
+## Google Sheets Helper
 def get_google_sheets_service():
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
-    if value.isdigit():
-        return int(value)
     try:
+        if value.isdigit():
+            return int(value)
         return float(value)
     except ValueError:
-        if value.lower() == "true":
-            return True
-        if value.lower() == "false":
-            return False
+        if value.lower() in ["true", "false"]:
+            return value.lower() == "true"
         try:
             return datetime.fromisoformat(value)
         except ValueError:
@@ -47,30 +45,25 @@ def convert_value(value: str):
                 days_since_epoch = float(value)
                 return datetime(1899, 12, 30) + timedelta(days=days_since_epoch)
             except ValueError:
-                pass
-        return value
+                return value
 
 def check_username_exists(username: str) -> bool:
     try:
         sheets = get_google_sheets_service()
         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=f'{USER_SHEET_RANGE}!B2:B').execute()
         values = result.get('values', [])
-        
-        for row in values:
-            if row and row[0] == username:
-                return True
-        return False
+        return any(row[0] == username for row in values if row)
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
-# Helper Functions for Password Hashing
+## Password Helper
 def hash_password(password: str) -> str:
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
-# Helper Functions for Token
+## JWT Helper
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -80,18 +73,15 @@ def create_access_token(data: dict, expires_delta: timedelta = None):
 def verify_token(token: str):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Invalid token")
-        return username
+        return payload.get("sub")
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired")
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
-# Routes
+# === Routes ===
 
-# 1. GET All Users
+## Get All Users
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_users():
     try:
@@ -101,11 +91,11 @@ async def read_users():
         if not values:
             raise HTTPException(status_code=404, detail="No data found")
         headers = values[0]
-        return [dict(zip(headers, [convert_value(value) for value in row])) for row in values[1:]]
+        return [dict(zip(headers, map(convert_value, row))) for row in values[1:]]
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
-# 2. GET User By ID
+## Get User by ID
 @router.get("/{user_id}", response_model=Dict[str, Any])
 async def get_user_by_id(user_id: str):
     try:
@@ -116,47 +106,32 @@ async def get_user_by_id(user_id: str):
             raise HTTPException(status_code=404, detail="No data found")
         headers = values[0]
         for row in values[1:]:
-            user_data = dict(zip(headers, [convert_value(value) for value in row]))
-            if user_data.get("id") == user_id:  # Assuming "id" is the column name
+            user_data = dict(zip(headers, map(convert_value, row)))
+            if user_data.get("id") == user_id:
                 return user_data
         raise HTTPException(status_code=404, detail="User not found")
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
-# 3. POST Create User
+## Create User
 @router.post("/")
-async def create_user_with_check(user: Dict[str, Any]):
-    if not user.get("username"):
-        raise HTTPException(status_code=400, detail="Username is required")
-
+async def create_user(user: Dict[str, Any]):
     if check_username_exists(user.get("username")):
         raise HTTPException(status_code=400, detail="Username already exists")
-    
-    user_id = str(uuid4())
-    created_on = datetime.now().isoformat()
-    
-    user["id"] = user_id
-    user["createdOn"] = created_on
-    
+    user["id"] = str(uuid4())
+    user["createdOn"] = datetime.now().isoformat()
     try:
         sheets = get_google_sheets_service()
-        
         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
-        values = result.get('values', [])
-        if not values or not values[0]:
-            raise HTTPException(status_code=500, detail="Header row is missing in the sheet")
-        
-        headers = values[0]
+        headers = result.get('values', [])[0]
         row_to_add = [user.get(header, "") for header in headers]
-        
         sheets.values().append(
             spreadsheetId=SPREADSHEET_ID,
             range=USER_SHEET_RANGE,
             valueInputOption="RAW",
             body={"values": [row_to_add]}
         ).execute()
-        
-        return {"message": "User added successfully", "id": user_id}
+        return {"message": "User added successfully", "id": user["id"]}
     except HttpError:
         raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
 
