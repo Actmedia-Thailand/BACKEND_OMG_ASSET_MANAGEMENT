@@ -15,11 +15,11 @@ import jwt
 
 # === Configuration ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SERVICE_ACCOUNT_FILE = './credentials.json'
-SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'
+SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
+SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 USER_SHEET_RANGE = 'User'
 
-SECRET_KEY = "omgthailand"  # ควรเก็บใน ENV
+SECRET_KEY = "omgthailand"  #! ควรเก็บใน ENV
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -191,6 +191,7 @@ async def register_user(user: Dict[str, Any]):
     user["id"] = user_id
     user["createdOn"] = created_on
     user["password"] = hashed_password  # Save hashed password
+    user["permission"] = 1
 
     try:
         sheets = get_google_sheets_service()
@@ -263,9 +264,9 @@ async def google_signup(code: str = Query(...)):
     try:
         # **ขั้นตอนที่ 1: รับ token access จาก Google ด้วย code**
         token_url = "https://oauth2.googleapis.com/token"
-        client_id = "58925176098-4s7j4uqgh9h77e1n74af32kt1spfml89.apps.googleusercontent.com"  # แทนด้วย Client ID ของคุณ
-        client_secret = "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"  # แทนด้วย Client Secret ของคุณ
-        redirect_uri = "http://localhost:8000/users/google_signup"  # Redirect URI ของคุณ
+        client_id = "58925176098-4s7j4uqgh9h77e1n74af32kt1spfml89.apps.googleusercontent.com"   #! ควรเก็บใน ENV
+        client_secret = "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"   #! ควรเก็บใน ENV
+        redirect_uri = "http://localhost:8000/users/google_signup"  
 
         data = {
             "code": code,
@@ -292,13 +293,14 @@ async def google_signup(code: str = Query(...)):
         # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
         if check_username_exists(email):
             access_token = create_access_token(data={"sub": email})
-            redirect_url = f"http://localhost:3000?token={access_token}"
+            redirect_url = f"http://localhost:3000/asset?token={access_token}"#! แก้ urlfrontend
             return RedirectResponse(url=redirect_url)
 
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
         user_data = {
             "id": str(uuid4()),
             "username": email,
+            "permission" : 1,
             "createdOn": datetime.now().isoformat(),
         }
 
@@ -316,7 +318,7 @@ async def google_signup(code: str = Query(...)):
 
         access_token = create_access_token(data={"sub": user_data["username"]})
 
-        redirect_url = f"http://localhost:3000?token={access_token}"
+        redirect_url = f"http://localhost:3000/asset?token={access_token}"#! แก้ urlfrontend
 
         return RedirectResponse(url=redirect_url)
     except requests.RequestException as e:
