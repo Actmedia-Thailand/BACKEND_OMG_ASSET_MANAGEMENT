@@ -1,9 +1,8 @@
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from uuid import uuid4
 
@@ -23,9 +22,20 @@ def get_google_sheets_service():
 
 def convert_value(value: str):
     try:
-        return int(value) if value.isdigit() else float(value)
+        if value.isdigit():
+            return int(value)
+        return float(value)
     except ValueError:
-        return value
+        if value.lower() in ["true", "false"]:
+            return value.lower() == "true"
+        try:
+            return datetime.fromisoformat(value)
+        except ValueError:
+            try:
+                days_since_epoch = float(value)
+                return datetime(1899, 12, 30) + timedelta(days=days_since_epoch)
+            except ValueError:
+                return value
 
 # === CRUD Routes for Asset ===
 
