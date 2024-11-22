@@ -10,7 +10,8 @@ else # macOS/Linux
 	ACTIVATE = source $(VENV)/bin/activate
 endif
 
-# Command to run uvicorn server
+# Command to run uvicorn server  
+#Run server ด้วยคำสั่งทุกครั้งที่ปิดแล้วเปิดมาใหม่
 RUN_UVICORN = uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log --reload
 
 # Default target to set up environment and run the server
@@ -22,5 +23,5 @@ install:
 	$(ACTIVATE) && pip install -r requirements.txt
 
 # Create a new virtual environment (if .venv does not exist)
-create-venv:
+create-venv: 
 	python3 -m venv $(VENV)
