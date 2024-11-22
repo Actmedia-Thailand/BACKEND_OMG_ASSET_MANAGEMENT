@@ -1,11 +1,15 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import RedirectResponse
 from google.oauth2.service_account import Credentials
+from google.auth.transport.requests import Request
+from google.oauth2.id_token import verify_oauth2_token
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from uuid import uuid4
+import requests
 import bcrypt
 import jwt
 
@@ -96,22 +100,7 @@ async def read_users():
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
 ## Get User by ID
-@router.get("/{user_id}", response_model=Dict[str, Any])
-async def get_user_by_id(user_id: str):
-    try:
-        sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
-        values = result.get('values', [])
-        if not values:
-            raise HTTPException(status_code=404, detail="No data found")
-        headers = values[0]
-        for row in values[1:]:
-            user_data = dict(zip(headers, map(convert_value, row)))
-            if user_data.get("id") == user_id:
-                return user_data
-        raise HTTPException(status_code=404, detail="User not found")
-    except HttpError:
-        raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
+
 
 ## Create User
 @router.post("/")
@@ -268,6 +257,70 @@ async def login(user: Dict[str, Any]):
         raise HTTPException(status_code=404, detail="User not found")
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
+
+@router.get("/google_signup")
+async def google_signup(code: str = Query(...)):
+    try:
+        # **ขั้นตอนที่ 1: รับ token access จาก Google ด้วย code**
+        token_url = "https://oauth2.googleapis.com/token"
+        client_id = "58925176098-4s7j4uqgh9h77e1n74af32kt1spfml89.apps.googleusercontent.com"  # แทนด้วย Client ID ของคุณ
+        client_secret = "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"  # แทนด้วย Client Secret ของคุณ
+        redirect_uri = "http://localhost:8000/users/google_signup"  # Redirect URI ของคุณ
+
+        data = {
+            "code": code,
+            "client_id": client_id,
+            "client_secret": client_secret,
+            "redirect_uri": redirect_uri,
+            "grant_type": "authorization_code",
+        }
+
+        token_response = requests.post(token_url, data=data)
+        token_response.raise_for_status()
+        tokens = token_response.json()
+        id_token = tokens.get("id_token")
+
+        if not id_token:
+            raise HTTPException(status_code=400, detail="ID Token missing in response")
+
+        # **ขั้นตอนที่ 2: Decode ID Token เพื่อดึงข้อมูล email**
+        id_info = verify_oauth2_token(id_token, Request(), client_id)
+        email = id_info.get("email")
+        if not email:
+            raise HTTPException(status_code=400, detail="Email not found in ID Token")
+
+        # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
+        if check_username_exists(email):
+            return {"message": "Email already registered"}
+
+        # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
+        user_data = {
+            "id": str(uuid4()),
+            "username": email,
+            "createdOn": datetime.now().isoformat(),
+        }
+
+        sheets = get_google_sheets_service()
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
+        headers = result.get('values', [])[0]
+
+        row_to_add = [user_data.get(header, "") for header in headers]
+        sheets.values().append(
+            spreadsheetId=SPREADSHEET_ID,
+            range=USER_SHEET_RANGE,
+            valueInputOption="RAW",
+            body={"values": [row_to_add]},
+        ).execute()
+
+        access_token = create_access_token(data={"sub": user_data["id"]})
+
+        redirect_url = f"http://localhost:3000?token={access_token}"
+
+        return RedirectResponse(url=redirect_url)
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Error communicating with Google: {e}")
+    except HttpError:
+        raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
 
 
 # Protected Route Example
