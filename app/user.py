@@ -236,7 +236,7 @@ async def login(user: Dict[str, Any]):
                     raise HTTPException(status_code=401, detail="Invalid password")
                 
                 # สร้าง JWT token
-                token = create_access_token(data={"sub": user_data["id"]})
+                token = create_access_token(data={"sub": user_data["username"]})
                 
                 # กำหนด response fields
                 response_user = {
@@ -291,7 +291,9 @@ async def google_signup(code: str = Query(...)):
 
         # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
         if check_username_exists(email):
-            return {"message": "Email already registered"}
+            access_token = create_access_token(data={"sub": email})
+            redirect_url = f"http://localhost:3000?token={access_token}"
+            return RedirectResponse(url=redirect_url)
 
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
         user_data = {
@@ -312,7 +314,7 @@ async def google_signup(code: str = Query(...)):
             body={"values": [row_to_add]},
         ).execute()
 
-        access_token = create_access_token(data={"sub": user_data["id"]})
+        access_token = create_access_token(data={"sub": user_data["username"]})
 
         redirect_url = f"http://localhost:3000?token={access_token}"
 
