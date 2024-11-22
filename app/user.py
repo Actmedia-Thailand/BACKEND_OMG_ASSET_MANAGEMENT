@@ -293,7 +293,7 @@ async def google_signup(code: str = Query(...)):
         # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
         if check_username_exists(email):
             access_token = create_access_token(data={"sub": email})
-            redirect_url = f"http://localhost:3000/asset?token={access_token}"#! แก้ urlfrontend
+            redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
             return RedirectResponse(url=redirect_url)
 
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
@@ -318,7 +318,7 @@ async def google_signup(code: str = Query(...)):
 
         access_token = create_access_token(data={"sub": user_data["username"]})
 
-        redirect_url = f"http://localhost:3000/asset?token={access_token}"#! แก้ urlfrontend
+        redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
 
         return RedirectResponse(url=redirect_url)
     except requests.RequestException as e:
