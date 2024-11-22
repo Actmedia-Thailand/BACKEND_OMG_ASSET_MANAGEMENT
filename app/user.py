@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, Query
 from fastapi.security import OAuth2PasswordBearer
+from fastapi.responses import RedirectResponse
 from google.oauth2.service_account import Credentials
 from google.auth.transport.requests import Request
 from google.oauth2.id_token import verify_oauth2_token
@@ -258,7 +259,7 @@ async def login(user: Dict[str, Any]):
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
 @router.get("/google_signup")
-async def google_signup(code: str = Query(...), state: str = Query(...)):
+async def google_signup(code: str = Query(...)):
     try:
         # **ขั้นตอนที่ 1: รับ token access จาก Google ด้วย code**
         token_url = "https://oauth2.googleapis.com/token"
@@ -295,7 +296,7 @@ async def google_signup(code: str = Query(...), state: str = Query(...)):
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
         user_data = {
             "id": str(uuid4()),
-            "email": email,
+            "username": email,
             "createdOn": datetime.now().isoformat(),
         }
 
@@ -311,7 +312,11 @@ async def google_signup(code: str = Query(...), state: str = Query(...)):
             body={"values": [row_to_add]},
         ).execute()
 
-        return {"message": "Google Sign-up successful", "user": user_data}
+        access_token = create_access_token(data={"sub": user_data["id"]})
+
+        redirect_url = f"http://localhost:3000?token={access_token}"
+
+        return RedirectResponse(url=redirect_url)
     except requests.RequestException as e:
         raise HTTPException(status_code=500, detail=f"Error communicating with Google: {e}")
     except HttpError:
