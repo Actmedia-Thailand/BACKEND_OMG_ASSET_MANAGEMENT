@@ -7,7 +7,7 @@ from google.oauth2.id_token import verify_oauth2_token
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import uuid4
 import requests
 import bcrypt
@@ -51,12 +51,19 @@ def convert_value(value: str):
             except ValueError:
                 return value
 
-def check_username_exists(username: str) -> bool:
+def check_username_exists(username: str) -> Optional[str]:
     try:
         sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=f'{USER_SHEET_RANGE}!B2:B').execute()
+        # Fetch both columns A and B
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=f'{USER_SHEET_RANGE}!A2:B').execute()
         values = result.get('values', [])
-        return any(row[0] == username for row in values if row)
+        
+        for row in values:
+            # Ensure the row has at least two columns (ID and username)
+            if len(row) > 1 and row[1] == username:
+                return row[0]  # Return the ID from column A
+        
+        return None  # Return None if the username doesn't exist
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
