@@ -11,6 +11,8 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
+HEADERS = ["id", "First Name", "Last Name", "Gender", "Age", "Job Title", "Salary", "Start Date", "End Date", "Is Active", "Department", "Address", "City", "Country", "Email", "Phone Number", "createdOn"]
+
 
 router = APIRouter()
 
@@ -98,27 +100,41 @@ async def create_asset(asset: Dict[str, Any]):
 
 @router.put("/{asset_id}")
 async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
-    """Update an existing asset by ID."""
+    """Update an existing asset by ID with a predefined header."""
     try:
         sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=ASSET_SHEET_RANGE).execute()
-        values = result.get('values', [])
-        if not values:
-            raise HTTPException(status_code=404, detail="No assets found")
-        headers = values[0]
-        for i, row in enumerate(values[1:], start=2):
-            if row[0] == asset_id:  # Assuming "id" is in the first column
-                updated_row = [updated_data.get(header, row[j]) for j, header in enumerate(headers)]
-                sheets.values().update(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range=f"{ASSET_SHEET_RANGE}!A{i}",
-                    valueInputOption="RAW",
-                    body={"values": [updated_row]}
-                ).execute()
-                return {"message": "Asset updated successfully"}
-        raise HTTPException(status_code=404, detail="Asset not found")
+        
+        # Get UUID column only
+        uuids_result = sheets.values().get(
+            spreadsheetId=SPREADSHEET_ID, range=f"{ASSET_SHEET_RANGE}!A:A"  # Assuming "id" is in column A
+        ).execute()
+        uuids = [row[0] for row in uuids_result.get("values", []) if row]
+
+        # Binary search to find the row index
+        row_index = binary_search(uuids, asset_id)
+        if row_index == -1:
+            raise HTTPException(status_code=404, detail=f"Asset with ID {asset_id} not found")
+
+        # Create the updated row based on the predefined headers
+        updated_row = [updated_data.get(header, "") for header in HEADERS]
+
+        print(f"Update Range: {ASSET_SHEET_RANGE}!A{row_index + 1}")
+        print(f"Update Body: {updated_row}")
+
+
+        # Update the specific row in Google Sheets
+        sheets.values().update(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{ASSET_SHEET_RANGE}!A{row_index + 1}",
+            valueInputOption="RAW",
+            body={"values": [updated_row]}
+        ).execute()
+
+        return {"message": f"Asset with ID {asset_id} updated successfully"}
+    
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
@@ -133,7 +149,6 @@ async def delete_asset(asset_id: str):
             range=f"{ASSET_SHEET_RANGE}!A:A"  # Assuming UUIDs are in column A
         ).execute()
         values = result.get("values", [])
-        print(values)
         
         # Flatten the list of values
         uuids = [row[0] for row in values if row]  # Handle empty rows
