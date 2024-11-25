@@ -244,7 +244,7 @@ async def login(user: Dict[str, Any]):
                     raise HTTPException(status_code=401, detail="Invalid password")
                 
                 # สร้าง JWT token
-                token = create_access_token(data={"sub": user_data["username"]})
+                token = create_access_token(data={"sub": user_data["id"]})
                 
                 # กำหนด response fields
                 response_user = {
@@ -298,9 +298,11 @@ async def google_signup(code: str = Query(...)):
             raise HTTPException(status_code=400, detail="Email not found in ID Token")
 
         # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
-        if check_username_exists(email):
-            access_token = create_access_token(data={"sub": email})
-            redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
+        existsId = check_username_exists(email)
+
+        if existsId:
+            access_token = create_access_token(data={"sub": existsId})
+            redirect_url = f"http://localhost:3000/assets?token={access_token}&username={email}"  #! แก้ urlfrontend
             return RedirectResponse(url=redirect_url)
 
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
@@ -323,7 +325,7 @@ async def google_signup(code: str = Query(...)):
             body={"values": [row_to_add]},
         ).execute()
 
-        access_token = create_access_token(data={"sub": user_data["username"]})
+        access_token = create_access_token(data={"sub": user_data["id"]})
 
         redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
 
