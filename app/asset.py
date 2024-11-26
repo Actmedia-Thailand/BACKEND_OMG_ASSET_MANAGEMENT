@@ -11,7 +11,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
-HEADERS = ["id", "First Name", "Last Name", "Gender", "Age", "Job Title", "Salary", "Start Date", "End Date", "Is Active", "Department", "Address", "City", "Country", "Email", "Phone Number", "createdOn"]
+HEADERS = ["id", "firstName", "lastName", "gender", "age", "job_title", "salary", "start_date", "end_date", "isActive", "department", "address", "city", "country", "email", "phone_number", "createdOn"]
 
 router = APIRouter()
 
@@ -73,15 +73,8 @@ async def create_asset(asset: Dict[str, Any]):
     try:
         sheets = get_google_sheets_service()
         
-        # Fetch only the first row to get the headers
-        result = sheets.values().get(
-            spreadsheetId=SPREADSHEET_ID, 
-            range=f"{ASSET_SHEET_RANGE}!A1:Z1"  # Adjust the range to cover only the header row
-        ).execute()
-        headers = result.get('values', [[]])[0]  # Get headers or an empty list if not present
-        
         # Align the new asset with the headers
-        row_to_add = [asset.get(header, "") for header in headers]
+        row_to_add = [asset.get(header, "") for header in HEADERS]
         
         # Append the new row to the sheet
         sheets.values().append(
