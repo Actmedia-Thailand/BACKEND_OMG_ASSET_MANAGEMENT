@@ -33,21 +33,30 @@ def convert_value(value: str):
             return value.lower() == "true"
         return value.strip()
     
-def binary_search_by_index(data: list, target: str, indexes: list) -> int:
-    low, high = 0, len(data) - 1
+def binary_search_by_index(values: list, target: str) -> int:
+    """Perform binary search on the values and return the row number (1-based) if found."""
+    low, high = 0, len(values) - 1
+    # Extract UUIDs from the rows, excluding the header
+    uuids = [row[0].strip().lower() for row in values[1:] if row]  
+    normalized_view_id = target.strip().lower()
+
+    # Sort UUIDs before performing binary search
+    sorted_indexes = sorted(range(len(uuids)), key=lambda i: uuids[i])
+
     while low <= high:
         mid = (low + high) // 2
-        mid_index = indexes[mid]  # ใช้ดัชนีของแถวที่จัดเรียงแล้ว
-        mid_value = data[mid_index]  # ใช้ค่าในตำแหน่งที่ดัชนี mid ชี้ไป
-        print(f"Low: {low}, High: {high}, Mid: {mid}, Mid_index: {mid_index}, Mid_value: {mid_value}, Target: {target}")
-        
-        if mid_value == target:
-            return mid_index  # Return the index of the original UUID
-        elif mid_value < target:
+        mid_index = sorted_indexes[mid]  # ใช้ index ที่จัดเรียงแล้ว
+        mid_value = uuids[mid_index]
+
+        if mid_value == normalized_view_id:
+            return mid_index + 2  # +2 because the row is 1-based and the header is at row 1
+        elif mid_value < normalized_view_id:
             low = mid + 1
         else:
             high = mid - 1
+
     return -1  # Not found
+
 
 
 # === CRUD Routes for View ===
@@ -122,48 +131,39 @@ async def update_view(view_id: str, updated_data: Dict[str, Any]):
     """Update an existing view by ID."""
     try:
         sheets = get_google_sheets_service()
-        
-        # Fetch the data from the sheet
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=VIEW_SHEET_RANGE).execute()
-        values = result.get('values', [])
-        if not values:
+
+        # Fetch only the ID column to locate the row number
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=f"{VIEW_SHEET_RANGE}!A:A").execute()
+        values = result.get("values", [])
+
+        if not values or len(values) <= 1:
             raise HTTPException(status_code=404, detail="No views found")
-        
-        headers = values[0]  # The first row contains the headers
-        
-        # Find the row that matches the view_id (assuming "id" is in the first column)
-        row_index = None
-        for i, row in enumerate(values[1:], start=2):  # Skip header row, start at row 2
-            if row[0] == view_id:  # View ID matches
-                row_index = i
-                break
-        
-        if row_index is None:
-            raise HTTPException(status_code=404, detail="View not found")
-        
-        # Prepare the updated row data
-        updated_row = []
-        for j, header in enumerate(headers):
-            # If the updated data has a value for the header, use it, otherwise keep the original
-            updated_value = updated_data.get(header, values[row_index-1][j])  # Use the original value if not updated
-            
-            # Convert list values to string before updating
-            if isinstance(updated_value, list):
-                updated_value = json.dumps(updated_value)  # Convert the list as a JSON string
-            updated_row.append(str(updated_value))  # Ensure the value is a string
-        
-        # Update the row in the sheet
-        sheets.values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{VIEW_SHEET_RANGE}!A{row_index}",
-            valueInputOption="RAW",
-            body={"values": [updated_row]}
-        ).execute()
+
+        # Find the row that matches the view_id
+        sheet_row_number = binary_search_by_index(values, view_id)
+        if sheet_row_number == -1:
+            raise HTTPException(status_code=404, detail="View ID not found")
+
+        # Prepare updates for specific columns based on updated_data
+        updates = []
+        for header, value in updated_data.items():
+            if header in HEADERS:
+                col_index = HEADERS.index(header) + 1  # Convert to 1-based index for Google Sheets
+                updates.append({
+                    "range": f"{VIEW_SHEET_RANGE}!{chr(64 + col_index)}{sheet_row_number}",  # A1 notation
+                    "values": [[str(value)] if not isinstance(value, list) else [json.dumps(value)]]
+                })
+
+        # Batch update all the specified columns
+        if updates:
+            body = {"data": updates, "valueInputOption": "RAW"}
+            sheets.values().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body).execute()
 
         return {"message": "View updated successfully"}
-    
+
     except HttpError as e:
-        raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+        error_message = str(e)
+        raise HTTPException(status_code=500, detail=f"Failed to update Google Sheets: {error_message}")
 
 
 @router.delete("/{view_id}")
@@ -179,32 +179,22 @@ async def delete_view(view_id: str):
         if not values or len(values) <= 1:
             raise HTTPException(status_code=404, detail="No views found")
 
-        # Extract UUIDs and generate indexes of the rows (1-based index)
-        uuids = [row[0].strip().lower() for row in values[1:] if row]  # Excluding the header
-        normalized_view_id = view_id.strip().lower()
-
-        # Create an index list that tracks original positions of the UUIDs in the sorted order
-        indexes = list(range(len(uuids)))
-        indexes.sort(key=lambda x: uuids[x])  # Sort based on the UUID values
-        
-
-        # Perform binary search on indexes
-        row_index = binary_search_by_index(uuids, normalized_view_id, indexes)
-        
-        if row_index == -1:
-            raise HTTPException(status_code=404, detail="View not found")
-        
-        # Calculate row number in the sheet (add 2 for header and 1-based index)
-        sheet_row_number = row_index + 2  # +2 เนื่องจาก index เริ่มที่ 0 และ Header อยู่ที่แถวที่ 1
+        # Perform binary search on values to find the correct row index
+        sheet_row_number = binary_search_by_index(values, view_id)
         
         # Update only the `isDelete` column for the row
-        sheets.values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{VIEW_SHEET_RANGE}!I{sheet_row_number}",  # Assuming `isDelete` is in column I
-            valueInputOption="RAW",
-            body={"values": [[1]]}  # Set `isDelete` to 1 (soft delete)
-        ).execute()
-        
-        return {"message": "View soft-deleted successfully"}
+        if sheet_row_number != -1:
+            sheets.values().update(
+                spreadsheetId=SPREADSHEET_ID,
+                range=f"{VIEW_SHEET_RANGE}!I{sheet_row_number}",  # Assuming `isDelete` is in column I
+                valueInputOption="RAW",
+                body={"values": [[1]]}  # Set `isDelete` to 1 (soft delete)
+            ).execute()
+            
+            return {"message": "View soft-deleted successfully"}
+        else:
+            raise HTTPException(status_code=404, detail="View not found")
+    
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+
