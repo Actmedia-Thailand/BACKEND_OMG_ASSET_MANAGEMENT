@@ -11,6 +11,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
+HEADERS = ["id", "First Name", "Last Name", "Gender", "Age", "Job Title", "Salary", "Start Date", "End Date", "Is Active", "Department", "Address", "City", "Country", "Email", "Phone Number", "createdOn"]
 
 router = APIRouter()
 
@@ -37,7 +38,6 @@ def convert_value(value: str):
             except ValueError:
                 return value
             
-        # Perform Binary Search
 def binary_search(data, target):
     low, high = 0, len(data) - 1
     while low <= high:
@@ -135,13 +135,23 @@ async def delete_asset(asset_id: str):
         values = result.get("values", [])
         print(values)
         
-        # Flatten the list of values
-        uuids = [row[0] for row in values if row]  # Handle empty rows
+        # Flatten the list of values, skip the header row, normalize
+        uuids = [row[0].strip().lower() for row in values[1:] if row]  # Skip header and empty rows
+        
+        # Sort the list (if not already sorted)
+        uuids.sort()
+        
+        # Normalize the target asset_id
+        normalized_asset_id = asset_id.strip().lower()
         
         # Find the row index
-        row_index = binary_search(uuids, asset_id)
+        row_index = binary_search(uuids, normalized_asset_id)
+        print(f"Row index in list: {row_index}")
         if row_index == -1:
             raise HTTPException(status_code=404, detail=f"Asset with ID {asset_id} not found")
+        
+        # Adjust row_index for the spreadsheet (if skipping header, add 1)
+        spreadsheet_row_index = row_index + 1
         
         # Delete the row using batchUpdate
         sheets.batchUpdate(
@@ -151,8 +161,8 @@ async def delete_asset(asset_id: str):
                     "range": {
                         "sheetId": 1133662521,  # Replace with the actual sheetId
                         "dimension": "ROWS",
-                        "startIndex": row_index,  # row_index corresponds to the sheet's row
-                        "endIndex": row_index + 1
+                        "startIndex": spreadsheet_row_index - 1,  # Subtract 1 to get the correct zero-based index
+                        "endIndex": spreadsheet_row_index
                     }
                 }
             }]}
@@ -162,5 +172,6 @@ async def delete_asset(asset_id: str):
     
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+
 
 

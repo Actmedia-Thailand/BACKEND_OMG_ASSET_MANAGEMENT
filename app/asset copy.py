@@ -100,40 +100,37 @@ async def create_asset(asset: Dict[str, Any]):
 
 @router.put("/{asset_id}")
 async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
-    """Update an existing asset by ID with a predefined header."""
+    """Update an existing asset by ID with minimal processing."""
     try:
         sheets = get_google_sheets_service()
-        
-        # Get UUID column only
+
+        # Fetch UUID column (assuming "id" is in column A)
         uuids_result = sheets.values().get(
-            spreadsheetId=SPREADSHEET_ID, range=f"{ASSET_SHEET_RANGE}!A:A"  # Assuming "id" is in column A
+            spreadsheetId=SPREADSHEET_ID, range=f"{ASSET_SHEET_RANGE}!A:A"
         ).execute()
         uuids = [row[0] for row in uuids_result.get("values", []) if row]
 
-        # Binary search to find the row index
+        # Find the row index using binary search
         row_index = binary_search(uuids, asset_id)
         if row_index == -1:
             raise HTTPException(status_code=404, detail=f"Asset with ID {asset_id} not found")
 
-        # Create the updated row based on the predefined headers
+        # Construct the updated row
         updated_row = [updated_data.get(header, "") for header in HEADERS]
-
-        print(f"Update Range: {ASSET_SHEET_RANGE}!A{row_index + 1}")
-        print(f"Update Body: {updated_row}")
-
 
         # Update the specific row in Google Sheets
         sheets.values().update(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{ASSET_SHEET_RANGE}!A{row_index + 1}",
+            range=f"{ASSET_SHEET_RANGE}!A{row_index + 1}",  # +1 for 1-based indexing
             valueInputOption="RAW",
-            body={"values": [updated_row]}
+            body={"values": [updated_row]},
         ).execute()
 
         return {"message": f"Asset with ID {asset_id} updated successfully"}
-    
+
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+
 
 
 @router.delete("/{asset_id}")
