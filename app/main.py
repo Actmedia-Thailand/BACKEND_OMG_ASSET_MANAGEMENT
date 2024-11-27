@@ -2,6 +2,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.user import router as user_router
 from app.asset import router as asset_router
+from app.view import router as view_router
 
 app = FastAPI()
 
@@ -22,4 +23,5 @@ app.add_middleware(
 
 # Include User Router
 app.include_router(user_router, prefix="/users", tags=["Users"])
+app.include_router(view_router, prefix="/view", tags=["View"])
 app.include_router(asset_router, prefix="/asset", tags=["Asset"])

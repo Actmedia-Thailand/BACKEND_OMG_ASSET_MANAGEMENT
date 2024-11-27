@@ -7,7 +7,7 @@ from google.oauth2.id_token import verify_oauth2_token
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 from uuid import uuid4
 import requests
 import bcrypt
@@ -51,12 +51,19 @@ def convert_value(value: str):
             except ValueError:
                 return value
 
-def check_username_exists(username: str) -> bool:
+def check_username_exists(username: str) -> Optional[str]:
     try:
         sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=f'{USER_SHEET_RANGE}!B2:B').execute()
+        # Fetch both columns A and B
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=f'{USER_SHEET_RANGE}!A2:B').execute()
         values = result.get('values', [])
-        return any(row[0] == username for row in values if row)
+        
+        for row in values:
+            # Ensure the row has at least two columns (ID and username)
+            if len(row) > 1 and row[1] == username:
+                return row[0]  # Return the ID from column A
+        
+        return None  # Return None if the username doesn't exist
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
@@ -237,7 +244,7 @@ async def login(user: Dict[str, Any]):
                     raise HTTPException(status_code=401, detail="Invalid password")
                 
                 # สร้าง JWT token
-                token = create_access_token(data={"sub": user_data["username"]})
+                token = create_access_token(data={"sub": user_data["id"]})
                 
                 # กำหนด response fields
                 response_user = {
@@ -291,9 +298,11 @@ async def google_signup(code: str = Query(...)):
             raise HTTPException(status_code=400, detail="Email not found in ID Token")
 
         # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
-        if check_username_exists(email):
-            access_token = create_access_token(data={"sub": email})
-            redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
+        existsId = check_username_exists(email)
+
+        if existsId:
+            access_token = create_access_token(data={"sub": existsId})
+            redirect_url = f"http://localhost:3000/assets?token={access_token}&username={email}"  #! แก้ urlfrontend
             return RedirectResponse(url=redirect_url)
 
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
@@ -316,7 +325,7 @@ async def google_signup(code: str = Query(...)):
             body={"values": [row_to_add]},
         ).execute()
 
-        access_token = create_access_token(data={"sub": user_data["username"]})
+        access_token = create_access_token(data={"sub": user_data["id"]})
 
         redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
 
