@@ -5,6 +5,7 @@ from googleapiclient.errors import HttpError
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from uuid import uuid4
+import json
 
 # === Configuration ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -37,18 +38,6 @@ def convert_value(value: str):
                 return datetime(1899, 12, 30) + timedelta(days=days_since_epoch)
             except ValueError:
                 return value
-            
-def binary_search(data, target):
-    low, high = 0, len(data) - 1
-    while low <= high:
-        mid = (low + high) // 2
-        if data[mid] == target:
-            return mid  # Return the index in the list
-        elif data[mid] < target:
-            low = mid + 1
-        else:
-            high = mid - 1
-    return -1  # Not found
 
 def binary_search_by_index(values: list, target: str) -> int:
     """Perform binary search on the values and return the row number (1-based) if found."""
