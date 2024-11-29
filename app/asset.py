@@ -50,6 +50,30 @@ def binary_search(data, target):
             high = mid - 1
     return -1  # Not found
 
+def binary_search_by_index(values: list, target: str) -> int:
+    """Perform binary search on the values and return the row number (1-based) if found."""
+    low, high = 0, len(values) - 1
+    # Extract UUIDs from the rows, excluding the header
+    uuids = [row[0].strip().lower() for row in values[1:] if row]  
+    normalized_view_id = target.strip().lower()
+
+    # Sort UUIDs before performing binary search
+    sorted_indexes = sorted(range(len(uuids)), key=lambda i: uuids[i])
+
+    while low <= high:
+        mid = (low + high) // 2
+        mid_index = sorted_indexes[mid]  # ใช้ index ที่จัดเรียงแล้ว
+        mid_value = uuids[mid_index]
+
+        if mid_value == normalized_view_id:
+            return mid_index + 2  # +2 because the row is 1-based and the header is at row 1
+        elif mid_value < normalized_view_id:
+            low = mid + 1
+        else:
+            high = mid - 1
+
+    return -1  # Not found
+
 # === CRUD Routes for Asset ===
 
 @router.get("/", response_model=List[Dict[str, Any]])
@@ -93,25 +117,45 @@ async def create_asset(asset: Dict[str, Any]):
 async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
     """Update an existing asset by ID."""
     try:
+        # เรียกใช้ Google Sheets API
         sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=ASSET_SHEET_RANGE).execute()
+        
+        # ดึงเฉพาะคอลัมน์แรกจาก Google Sheets
+        result = sheets.values().get(
+            spreadsheetId=SPREADSHEET_ID, 
+            range=f"{ASSET_SHEET_RANGE}!A:A"  # คอลัมน์แรกเท่านั้น
+        ).execute()
+        
         values = result.get('values', [])
         if not values:
             raise HTTPException(status_code=404, detail="No assets found")
-        headers = values[0]
-        for i, row in enumerate(values[1:], start=2):
-            if row[0] == asset_id:  # Assuming "id" is in the first column
-                updated_row = [updated_data.get(header, row[j]) for j, header in enumerate(headers)]
-                sheets.values().update(
-                    spreadsheetId=SPREADSHEET_ID,
-                    range=f"{ASSET_SHEET_RANGE}!A{i}",
-                    valueInputOption="RAW",
-                    body={"values": [updated_row]}
-                ).execute()
-                return {"message": "Asset updated successfully"}
-        raise HTTPException(status_code=404, detail="Asset not found")
+        
+        # หาหมายเลขแถวที่ตรงกับ asset_id ด้วย binary_search_by_index
+        sheet_row_number = binary_search_by_index(values, asset_id)
+        if sheet_row_number == -1:
+            raise HTTPException(status_code=404, detail="Asset ID not found")
+
+        # เตรียมข้อมูลอัปเดต
+        updates = []
+        for header, value in updated_data.items():
+            if header in HEADERS:  # ตรวจสอบว่า header อยู่ใน HEADERS
+                col_index = HEADERS.index(header) + 1  # คำนวณเป็น 1-based index
+                updates.append({
+                    "range": f"{ASSET_SHEET_RANGE}!{chr(64 + col_index)}{sheet_row_number}",  # A1 notation
+                    "values": [[str(value)] if not isinstance(value, list) else [json.dumps(value)]]
+                })
+
+        # ตรวจสอบว่ามีข้อมูลที่ต้องอัปเดตหรือไม่
+        if updates:
+            body = {"data": updates, "valueInputOption": "RAW"}
+            sheets.values().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body).execute()
+
+        return {"message": "Asset updated successfully"}
+
     except HttpError as e:
-        raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+        error_message = str(e)
+        raise HTTPException(status_code=500, detail=f"Failed to update Google Sheets: {error_message}")
+
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
@@ -121,45 +165,30 @@ async def delete_asset(asset_id: str):
         sheets = get_google_sheets_service()
         
         # Fetch only the UUID column
-        result = sheets.values().get(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{ASSET_SHEET_RANGE}!A:A"  # Assuming UUIDs are in column A
-        ).execute()
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID,range=f"{ASSET_SHEET_RANGE}!A:A").execute()
         values = result.get("values", [])
-        print(values)
-        
-        # Flatten the list of values, skip the header row, normalize
-        uuids = [row[0].strip().lower() for row in values[1:] if row]  # Skip header and empty rows
-        
-        # Sort the list (if not already sorted)
-        uuids.sort()
-        
-        # Normalize the target asset_id
-        normalized_asset_id = asset_id.strip().lower()
-        
-        # Find the row index
-        row_index = binary_search(uuids, normalized_asset_id)
-        print(f"Row index in list: {row_index}")
-        if row_index == -1:
-            raise HTTPException(status_code=404, detail=f"Asset with ID {asset_id} not found")
-        
-        # Adjust row_index for the spreadsheet (if skipping header, add 1)
-        spreadsheet_row_index = row_index + 1
+
+        if not values or len(values) <= 1:
+            raise HTTPException(status_code=404, detail="No views found")
+
+        # Perform binary search on values to find the correct row index
+        sheet_row_number = binary_search_by_index(values, asset_id)
         
         # Delete the row using batchUpdate
-        sheets.batchUpdate(
-            spreadsheetId=SPREADSHEET_ID,
-            body={"requests": [{
-                "deleteDimension": {
-                    "range": {
-                        "sheetId": 1133662521,  # Replace with the actual sheetId
-                        "dimension": "ROWS",
-                        "startIndex": spreadsheet_row_index - 1,  # Subtract 1 to get the correct zero-based index
-                        "endIndex": spreadsheet_row_index
+        if sheet_row_number != -1:
+            sheets.batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body={"requests": [{
+                    "deleteDimension": {
+                        "range": {
+                            "sheetId": 1133662521,  # Replace with the actual sheetId
+                            "dimension": "ROWS",
+                            "startIndex": sheet_row_number - 1,  # Subtract 1 to get the correct zero-based index
+                            "endIndex": sheet_row_number
+                        }
                     }
-                }
-            }]}
-        ).execute()
+                }]}
+            ).execute()
         
         return {"message": f"Asset with ID {asset_id} deleted successfully"}
     

@@ -154,7 +154,7 @@ async def update_view(view_id: str, updated_data: Dict[str, Any]):
                     "values": [[str(value)] if not isinstance(value, list) else [json.dumps(value)]]
                 })
 
-        # Batch update all the specified columns
+        #? Batch update all the specified columns good for update multi cell rather than normal update
         if updates:
             body = {"data": updates, "valueInputOption": "RAW"}
             sheets.values().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body).execute()
