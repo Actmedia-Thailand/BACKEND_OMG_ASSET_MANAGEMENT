@@ -12,7 +12,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'  #! Should be stored in ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! Should be stored in ENV
 VIEW_SHEET_RANGE = 'View'  #! Specify the range for the View sheet
-HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sort", "group", "isDelete", "createdOn"]
+HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group", "isDelete", "createdOn"]
 
 router = APIRouter()
 
