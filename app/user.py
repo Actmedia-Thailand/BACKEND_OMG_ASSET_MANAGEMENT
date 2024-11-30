@@ -335,6 +335,23 @@ async def google_signup(code: str = Query(...)):
     except HttpError:
         raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
 
+@router.get("/{user_id}", response_model=Dict[str, Any])
+async def get_user_by_id(user_id: str):
+    try:
+        sheets = get_google_sheets_service()
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
+        values = result.get('values', [])
+        if not values:
+            raise HTTPException(status_code=404, detail="No data found")
+
+        headers = values[0]  # ใช้ row แรกเป็น headers
+        for row in values[1:]:  # เริ่มจาก row ที่ 2
+            if row[0] == user_id:  # ตรวจสอบว่าค่าใน column แรกตรงกับ user_id
+                return dict(zip(headers, map(convert_value, row)))  # ส่งข้อมูลกลับเป็น dict
+        
+        raise HTTPException(status_code=404, detail="User not found")  # หากไม่พบ user
+    except HttpError:
+        raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
 
 # Protected Route Example
 @router.get("/protected")
