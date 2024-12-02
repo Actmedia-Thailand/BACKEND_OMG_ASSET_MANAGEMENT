@@ -12,7 +12,7 @@ SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'  #! Should be stored in ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! Should be stored in ENV
 VIEW_SHEET_RANGE = 'View'  #! Specify the range for the View sheet
-HEADERS = ["id", "id_user", "data_type", "viewName", "levelView", "filter", "group", "sort", "isDelete", "createdOn"]
+HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group", "isDelete", "createdOn"]
 
 router = APIRouter()
 
@@ -154,7 +154,7 @@ async def update_view(view_id: str, updated_data: Dict[str, Any]):
                     "values": [[str(value)] if not isinstance(value, list) else [json.dumps(value)]]
                 })
 
-        # Batch update all the specified columns
+        #? Batch update all the specified columns good for update multi cell rather than normal update
         if updates:
             body = {"data": updates, "valueInputOption": "RAW"}
             sheets.values().batchUpdate(spreadsheetId=SPREADSHEET_ID, body=body).execute()
