@@ -302,7 +302,7 @@ async def google_signup(code: str = Query(...)):
 
         if existsId:
             access_token = create_access_token(data={"sub": existsId})
-            redirect_url = f"http://localhost:3000/assets?token={access_token}&username={email}"  #! แก้ urlfrontend
+            redirect_url = f"http://localhost:3000/monitortoken?token={access_token}&username={email}"  #! แก้ urlfrontend
             return RedirectResponse(url=redirect_url)
 
         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
