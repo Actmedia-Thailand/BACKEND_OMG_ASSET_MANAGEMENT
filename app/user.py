@@ -198,7 +198,7 @@ async def register_user(user: Dict[str, Any]):
     user["id"] = user_id
     user["createdOn"] = created_on
     user["password"] = hashed_password  # Save hashed password
-    user["permission"] = 1
+    user["level"] = 1
 
     try:
         sheets = get_google_sheets_service()
@@ -253,7 +253,7 @@ async def login(user: Dict[str, Any]):
                     "name": user_data.get("name"),
                     "department": user_data.get("department"),
                     "position": user_data.get("position"),
-                    "permission": user_data.get("permission")
+                    "level": user_data.get("level")
                 }
                 
                 return {
@@ -309,7 +309,7 @@ async def google_signup(code: str = Query(...)):
         user_data = {
             "id": str(uuid4()),
             "username": email,
-            "permission" : 1,
+            "level" : 1,
             "createdOn": datetime.now().isoformat(),
         }
 

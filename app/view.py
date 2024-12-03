@@ -183,10 +183,11 @@ async def delete_view(view_id: str):
         sheet_row_number = binary_search_by_index(values, view_id)
         
         # Update only the `isDelete` column for the row
+        col_index = HEADERS.index("isDelete") + 1
         if sheet_row_number != -1:
             sheets.values().update(
                 spreadsheetId=SPREADSHEET_ID,
-                range=f"{VIEW_SHEET_RANGE}!I{sheet_row_number}",  # Assuming `isDelete` is in column I
+                range=f"{VIEW_SHEET_RANGE}!{chr(64 + col_index)}{sheet_row_number}",  # Assuming `isDelete` is in column I
                 valueInputOption="RAW",
                 body={"values": [[1]]}  # Set `isDelete` to 1 (soft delete)
             ).execute()
