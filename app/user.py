@@ -334,6 +334,7 @@ async def google_signup(code: str = Query(...)):
         raise HTTPException(status_code=500, detail=f"Error communicating with Google: {e}")
     except HttpError:
         raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
+    
 
 @router.get("/{user_id}", response_model=Dict[str, Any])
 async def get_user_by_id(user_id: str):
@@ -352,6 +353,47 @@ async def get_user_by_id(user_id: str):
         raise HTTPException(status_code=404, detail="User not found")  # หากไม่พบ user
     except HttpError:
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
+    
+@router.post("/reset_password")
+async def reset_password(request: Dict[str, Any]):
+    user_id = request.get("user_id")
+    old_password = request.get("old_password")
+    new_password = request.get("new_password")
+    
+    if not user_id or not old_password or not new_password:
+        raise HTTPException(status_code=400, detail="Missing required fields")
+    
+    try:
+        # Fetch all user data from the Google Sheet
+        sheets = get_google_sheets_service()
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
+        values = result.get('values', [])
+        if not values:
+            raise HTTPException(status_code=404, detail="No user data found")
+        
+        headers = values[0]  # Header row
+        for i, row in enumerate(values[1:], start=2):  # Data rows, start index at 2 for row number
+            user_data = dict(zip(headers, row))
+            if user_data.get("id") == user_id:
+                if not verify_password(old_password, user_data.get("password", "")):
+                    return {"message": "Password not updated"}  # Do not specify reason
+                
+                hashed_new_password = hash_password(new_password)
+                user_data["password"] = hashed_new_password
+                
+                updated_row = [user_data.get(header, row[j]) for j, header in enumerate(headers)]
+                sheets.values().update(
+                    spreadsheetId=SPREADSHEET_ID,
+                    range=f"{USER_SHEET_RANGE}!A{i}",
+                    valueInputOption="RAW",
+                    body={"values": [updated_row]}
+                ).execute()
+                
+                return {"message": "Password updated successfully"}
+        
+        raise HTTPException(status_code=404, detail="User not found")
+    except HttpError as e:
+        raise HTTPException(status_code=500, detail=f"Error updating password: {e}")
 
 # Protected Route Example
 @router.get("/protected")
