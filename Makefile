@@ -21,6 +21,11 @@ run:
 install:
 	$(ACTIVATE) && pip install -r requirements.txt
 
+# Install a specific package and update requirements.txt
+i:
+	$(ACTIVATE) && pip install $(word 2, $(MAKECMDGOALS))
+	$(ACTIVATE) && pip freeze > requirements.txt
+
 # Create a new virtual environment (if .venv does not exist)
 create-venv:
 	python3 -m venv $(VENV)
