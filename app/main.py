@@ -5,10 +5,10 @@ from app.asset import router as asset_router
 from app.view import router as view_router
 from slowapi import Limiter
 from slowapi.util import get_remote_address
-from slowapi.middleware import SlowAPIMiddleware
+
 
 # Create a Limiter object. 30 request per minute per IP
-limiter = Limiter(key_func=get_remote_address, default_limits=["30/minute"])
+limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
 
 # Create the FastAPI app
 app = FastAPI()
@@ -20,15 +20,15 @@ origins = [
 ]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["POST, GET, DELETE, PUT"],#only Browser Post man still send every method such as patch
-    allow_headers=["Content-Type", "Authorization"],
+    allow_origins=origins,  # ระบุ origins ที่อนุญาต
+    allow_credentials=True,  # อนุญาตส่ง credentials (cookies, headers)
+    allow_methods=["*"],  # อนุญาตทุก HTTP method
+    allow_headers=["*"],  # อนุญาตทุก header
 )
 
 # Add the SlowAPI Middleware
 app.state.limiter = limiter  # Set the limiter to the app's state
-app.add_middleware(SlowAPIMiddleware)  # No arguments are passed here
+
 
 # Include routers
 app.include_router(user_router, prefix="/users", tags=["Users"])
