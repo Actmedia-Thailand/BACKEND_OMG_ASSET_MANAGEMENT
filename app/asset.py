@@ -1,3 +1,8 @@
+"""
+asset.py
+--------
+A FastAPI module for managing assets in a Google Sheets document.
+"""
 from fastapi import APIRouter, HTTPException
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
@@ -10,19 +15,24 @@ import json
 # === Configuration ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
+""" credentials file declared in the Google Cloud Platform """
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
+""" name of google sheet page """
 HEADERS = ["MACADDRESS", "TimeStamp (Last)", "Playbox Label", "Store Location", "Store Section", "StoreCode", "RUNNO(Some)", "GroupID", "GroupName", "TimeStamp (Last Run)", "Black Condition", "Retailer", "Category", "DisplayConnected", "Display AspectRatio", "Display Arrangement", "Display Position", "ConnectVia", "wifiSSID", "ProjectName", "screen Position Side", "setMacAddress", "Phone", "DongleWifi", "id", "isDelete", "createdOn"];
+""" list of headers in the Google Sheets document same as key of json file """
 
 router = APIRouter()
 
 # === Helper Functions ===
 
 def get_google_sheets_service():
+    """Initialize the Google Sheets service."""
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
+    """Convert string values to their appropriate Python types such as int, float, bool, or datetime."""
     try:
         if value.isdigit():
             return int(value)
@@ -39,8 +49,17 @@ def convert_value(value: str):
             except ValueError:
                 return value
 
+
 def binary_search_by_index(values: list, target: str) -> int:
-    """Perform binary search on the values and return the row number (1-based) if found."""
+    """input is a list of values and a target string to search for. The function performs a binary search on the values and returns the row number (1-based) if found, otherwise -1.
+
+    Args:
+        values (list): rows of values from Google Sheets
+        target (str): the target string to search for
+
+    Returns:
+        int: the row number (1-based) if found, otherwise -1
+    """
     if not values or len(values) < 2:
         return -1  # Handle cases with no data or just a header
 
@@ -69,6 +88,9 @@ def binary_search_by_index(values: list, target: str) -> int:
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets():
+    """ Summary: Read all assets from the Google Sheets document.
+        flow: get_google_sheets_service() -> sheets.values().get() -> parse_value() -> data
+    """
     try:
         sheets = get_google_sheets_service()
         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=ASSET_SHEET_RANGE).execute()
@@ -103,7 +125,9 @@ async def read_assets():
 
 @router.post("/")
 async def create_asset(asset: Dict[str, Any]):
-    """Create a new asset."""
+    """ Summary: Create a new asset in the Google Sheets document.
+        Flow: input asset dict -> set id, createdOn, isDelete -> sheets.values().append() -> success message
+    """
     asset["id"] = str(uuid4())
     asset["createdOn"] = datetime.now().isoformat()
     asset["isDelete"] = 0  # Default to not deleted
@@ -122,7 +146,8 @@ async def create_asset(asset: Dict[str, Any]):
 
 @router.put("/{asset_id}")
 async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
-    """Update an existing asset by ID."""
+    """Summary: Update an existing asset by ID.
+        Flow: get_google_sheets_service() -> sheets.values().get() -> binary_search_by_index() -> update values -> sheets.values().batchUpdate()"""
     try:
         # Initialize Google Sheets service
         sheets = get_google_sheets_service()
@@ -160,7 +185,8 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
 
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
-    """Mark an asset as deleted by setting isDelete to 1."""
+    """Summary: Mark an asset as deleted by setting isDelete to 1.
+        Flow: get_google_sheets_service() -> sheets.values().get() -> binary_search_by_index() -> sheets.values().update()"""
     try:
         # Initialize Google Sheets service
         sheets = get_google_sheets_service()
