@@ -4,8 +4,10 @@
 VENV = .venv
 
 # Detect OS and set activation path
-ifeq ($(OS), Windows_NT) # Windows
+ifeq ($(OS), Windows_NT) # Windows #เปิดด้วย Git Bash 
 	ACTIVATE = source $(VENV)/Scripts/activate
+	# เปิดด้วย Git Bash หรือ Cmd  .venv\Scripts\activate
+
 else # macOS/Linux
 	ACTIVATE = source $(VENV)/bin/activate
 endif
