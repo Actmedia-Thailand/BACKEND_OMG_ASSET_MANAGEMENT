@@ -41,21 +41,23 @@ def convert_value(value: str):
 
 def binary_search_by_index(values: list, target: str) -> int:
     """Perform binary search on the values and return the row number (1-based) if found."""
-    low, high = 0, len(values) - 1
-    # Extract UUIDs from the rows, excluding the header
-    uuids = [row[0].strip().lower() for row in values[1:] if row]  
-    normalized_view_id = target.strip().lower()
+    if not values or len(values) < 2:
+        return -1  # Handle cases with no data or just a header
 
-    # Sort UUIDs before performing binary search
-    sorted_indexes = sorted(range(len(uuids)), key=lambda i: uuids[i])
+    # Extract and sort rows (excluding the header) based on the UUID in the first column
+    sorted_values = sorted(values[1:], key=lambda row: row[0].strip().lower())
+
+    normalized_view_id = target.strip().lower()
+    low, high = 0, len(sorted_values) - 1
 
     while low <= high:
         mid = (low + high) // 2
-        mid_index = sorted_indexes[mid]  # ใช้ index ที่จัดเรียงแล้ว
-        mid_value = uuids[mid_index]
+        mid_value = sorted_values[mid][0].strip().lower()
 
         if mid_value == normalized_view_id:
-            return mid_index + 2  # +2 because the row is 1-based and the header is at row 1
+            # Find the original index in the unsorted list
+            original_index = values.index(sorted_values[mid])
+            return original_index + 1  # +1 to make it 1-based
         elif mid_value < normalized_view_id:
             low = mid + 1
         else:
