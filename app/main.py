@@ -1,3 +1,35 @@
+"""
+FastAPI Main Application Module
+==============================
+
+This module initializes and configures the main FastAPI application with CORS,
+rate limiting, and route registration.
+
+**Features**
+
+    * CORS (Cross-Origin Resource Sharing) middleware configuration
+    * Rate limiting using SlowAPI
+    * API route registration for different modules (users, assets, views)
+
+**Implementation Details**
+
+    * Rate limiting: 100 requests per minute per IP address
+    * CORS: Configured for local development (localhost:3000)
+    * Modular routing: Separate routers for users, assets, and views
+
+**Dependencies**
+
+    * FastAPI: Web framework for building APIs
+    * SlowAPI: Rate limiting middleware
+    * CORS Middleware: Handle Cross-Origin Resource Sharing
+
+**Routers**
+
+    * /users: User management endpoints
+    * /view: View management endpoints
+    * /asset: Asset management endpoints
+"""
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.user import router as user_router
