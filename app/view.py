@@ -1,36 +1,36 @@
 """
-View Management Module
-=====================
+    View Management Module
+    =====================
 
-This module provides a FastAPI router for managing views in a Google Sheets document.
-It implements CRUD operations for view management.
+    This module provides a FastAPI router for managing views in a Google Sheets document.
+    It implements CRUD operations for view management.
 
-**Features**
+    **Features**
 
-    * Google Sheets integration for view data storage
-    * Binary search implementation for efficient view lookup
-    * JSON data handling for complex view configurations
-    * Soft delete functionality
-    * Batch update operations
+        * Google Sheets integration for view data storage
+        * Binary search implementation for efficient view lookup
+        * JSON data handling for complex view configurations
+        * Soft delete functionality
+        * Batch update operations
 
-**API Endpoints**
+    **API Endpoints**
 
-    * GET /: Retrieve all non-deleted views
-    * POST /: Create new view
-    * PUT /{view_id}: Update existing view
-    * DELETE /{view_id}: Soft delete view
+        * GET /: Retrieve all non-deleted views
+        * POST /: Create new view
+        * PUT /{view_id}: Update existing view
+        * DELETE /{view_id}: Soft delete view
 
-**Configuration**
+    **Configuration**
 
-    * Uses Google Sheets API v4
-    * Configurable sheet range and headers
-    * Environment variables for sensitive data
+        * Uses Google Sheets API v4
+        * Configurable sheet range and headers
+        * Environment variables for sensitive data
 
-**Dependencies**
+    **Dependencies**
 
-    * FastAPI: Web framework
-    * google-auth: Google authentication
-    * google-api-python-client: Google Sheets API client
+        * FastAPI: Web framework
+        * google-auth: Google authentication
+        * google-api-python-client: Google Sheets API client
 """
 
 from fastapi import APIRouter, HTTPException
@@ -53,46 +53,46 @@ router = APIRouter()
 
 def get_google_sheets_service():
     """
-    Initialize and return Google Sheets service instance.
+        Initialize and return Google Sheets service instance.
 
-    **Input:**
+        **Input:**
 
-        None
-        
-    **Process:**
+            None
+            
+        **Process:**
 
-        1. Load credentials from service account file
-        2. Create Google Sheets API service
-        
-    **Output:**
+            1. Load credentials from service account file
+            2. Create Google Sheets API service
+            
+        **Output:**
 
-        - Google Sheets API service object
-        - Raises: Could fail if credentials are invalid
+            - Google Sheets API service object
+            - Raises: Could fail if credentials are invalid
     """
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
     """
-    Convert string values to appropriate Python types.
+        Convert string values to appropriate Python types.
 
-    **Input:**
+        **Input:**
 
-        - value (str): String value to convert from Google Sheets
-        
-    **Process:**
+            - value (str): String value to convert from Google Sheets
+            
+        **Process:**
 
-        1. Try converting to integer if string contains only digits
-        2. Try converting to float if possible
-        3. Convert to boolean if string is "true" or "false"
-        4. Return stripped string if no conversion possible
-        
-    **Output:**
+            1. Try converting to integer if string contains only digits
+            2. Try converting to float if possible
+            3. Convert to boolean if string is "true" or "false"
+            4. Return stripped string if no conversion possible
+            
+        **Output:**
 
-        - int: If value is numeric integer
-        - float: If value is numeric with decimal
-        - bool: If value is boolean string
-        - str: If no other conversion is possible
+            - int: If value is numeric integer
+            - float: If value is numeric with decimal
+            - bool: If value is boolean string
+            - str: If no other conversion is possible
     """
     try:
         if value.isdigit():
@@ -105,24 +105,24 @@ def convert_value(value: str):
 
 def binary_search_by_index(values: list, target: str) -> int:
     """
-    Perform binary search to find view row index.
+        Perform binary search to find view row index.
 
-    **Input:**
+        **Input:**
 
-        - values (list): List of rows from Google Sheets
-        - target (str): View ID to search for
-        
-    **Process:**
+            - values (list): List of rows from Google Sheets
+            - target (str): View ID to search for
+            
+        **Process:**
 
-        1. Handle edge cases (empty list or single header)
-        2. Sort values based on first column (excluding header)
-        3. Perform binary search on sorted values
-        4. Convert found index back to original row number
-        
-    **Output:**
+            1. Handle edge cases (empty list or single header)
+            2. Sort values based on first column (excluding header)
+            3. Perform binary search on sorted values
+            4. Convert found index back to original row number
+            
+        **Output:**
 
-        - int: Row number (1-based) if found
-        - int: -1 if target not found
+            - int: Row number (1-based) if found
+            - int: -1 if target not found
     """
     if not values or len(values) < 2:
         return -1  # Handle cases with no data or just a header
@@ -147,23 +147,23 @@ def binary_search_by_index(values: list, target: str) -> int:
 
 def parse_value(value):
     """
-    Parse and convert cell values from Google Sheets.
+        Parse and convert cell values from Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - value (str): Raw value from Google Sheets cell
-        
-    **Process:**
+            - value (str): Raw value from Google Sheets cell
+            
+        **Process:**
 
-        1. Try parsing as JSON for complex data types
-        2. Convert "1" and "0" to integers
-        3. Return original value if no conversion needed
-        
-    **Output:**
+            1. Try parsing as JSON for complex data types
+            2. Convert "1" and "0" to integers
+            3. Return original value if no conversion needed
+            
+        **Output:**
 
-        - dict/list: If value is valid JSON
-        - int: If value is "1" or "0"
-        - str: Original value if no conversion applies
+            - dict/list: If value is valid JSON
+            - int: If value is "1" or "0"
+            - str: Original value if no conversion applies
     """
     try:
         return json.loads(value)
@@ -177,24 +177,24 @@ def parse_value(value):
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_views():
     """
-    Retrieve all non-deleted views from Google Sheets.
+        Retrieve all non-deleted views from Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        None (HTTP GET request)
-        
-    **Process:**
+            None (HTTP GET request)
+            
+        **Process:**
 
-        1. Connect to Google Sheets service
-        2. Fetch all rows from specified range
-        3. Parse values and convert to appropriate types
-        4. Filter out deleted views
-        
-    **Output:**
+            1. Connect to Google Sheets service
+            2. Fetch all rows from specified range
+            3. Parse values and convert to appropriate types
+            4. Filter out deleted views
+            
+        **Output:**
 
-        - List[Dict]: List of view dictionaries
-        - HTTPException: 404 if no views found
-        - HTTPException: 500 if Google Sheets error occurs
+            - List[Dict]: List of view dictionaries
+            - HTTPException: 404 if no views found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()
@@ -217,24 +217,24 @@ async def read_views():
 @router.post("/")
 async def create_view(view: Dict[str, Any]):
     """
-    Create new view in Google Sheets.
+        Create new view in Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - view (Dict[str, Any]): View data in dictionary format
-        
-    **Process:**
+            - view (Dict[str, Any]): View data in dictionary format
+            
+        **Process:**
 
-        1. Generate UUID for new view
-        2. Add creation timestamp
-        3. Set isDelete flag to 0
-        4. Convert view dict to row format
-        5. Append row to Google Sheets
-        
-    **Output:**
+            1. Generate UUID for new view
+            2. Add creation timestamp
+            3. Set isDelete flag to 0
+            4. Convert view dict to row format
+            5. Append row to Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message with new view ID
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message with new view ID
+            - HTTPException: 500 if Google Sheets error occurs
     """
     view["id"] = str(uuid4())
     view["isDelete"] = 0
@@ -261,25 +261,25 @@ async def create_view(view: Dict[str, Any]):
 @router.put("/{view_id}")
 async def update_view(view_id: str, updated_data: Dict[str, Any]):
     """
-    Update existing view by ID.
+        Update existing view by ID.
 
-    **Input:**
+        **Input:**
 
-        - view_id (str): UUID of view to update
-        - updated_data (Dict[str, Any]): New view data
-        
-    **Process:**
+            - view_id (str): UUID of view to update
+            - updated_data (Dict[str, Any]): New view data
+            
+        **Process:**
 
-        1. Find view row using binary search
-        2. Create batch update operations for changed fields
-        3. Convert complex data types to JSON strings
-        4. Execute batch update in Google Sheets
-        
-    **Output:**
+            1. Find view row using binary search
+            2. Create batch update operations for changed fields
+            3. Convert complex data types to JSON strings
+            4. Execute batch update in Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message
-        - HTTPException: 404 if view not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message
+            - HTTPException: 404 if view not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()
@@ -314,23 +314,23 @@ async def update_view(view_id: str, updated_data: Dict[str, Any]):
 @router.delete("/{view_id}")
 async def delete_view(view_id: str):
     """
-    Soft delete view by setting isDelete flag.
+        Soft delete view by setting isDelete flag.
 
-    **Input:**
+        **Input:**
 
-        - view_id (str): UUID of view to delete
-        
-    **Process:**
+            - view_id (str): UUID of view to delete
+            
+        **Process:**
 
-        1. Find view row using binary search
-        2. Update isDelete column to 1
-        3. Execute update in Google Sheets
-        
-    **Output:**
+            1. Find view row using binary search
+            2. Update isDelete column to 1
+            3. Execute update in Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message
-        - HTTPException: 404 if view not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message
+            - HTTPException: 404 if view not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()

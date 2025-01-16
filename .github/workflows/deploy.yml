@@ -1,0 +1,31 @@
+name: Deploy to Local Server
+
+on:
+  push:
+    branches: [main] # หรือ master แล้วแต่ branch หลักของคุณ
+  pull_request:
+    branches: [main] # เพิ่มส่วนนี้เพื่อให้ทำงานเมื่อมี PR เข้า main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh/
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+
+      - name: Deploy to Server
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USERNAME: ${{ secrets.SERVER_USERNAME }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o StrictHostKeyChecking=no ${{ secrets.SERVER_USERNAME }}@${{ secrets.SERVER_HOST }} "\
+            cd /home/dev01/OMG/BACKEND_OMG_ASSET_MANAGEMENT && \
+            git pull origin main && \
+            docker-compose down && \
+            docker-compose up -d --build"
