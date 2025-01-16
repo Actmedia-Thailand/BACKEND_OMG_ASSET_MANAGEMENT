@@ -1,44 +1,44 @@
 """
-User Management Module
-=====================
+    User Management Module
+    =====================
 
-This module provides a FastAPI router for managing users in a Google Sheets document.
-It implements user authentication, registration, and CRUD operations.
+    This module provides a FastAPI router for managing users in a Google Sheets document.
+    It implements user authentication, registration, and CRUD operations.
 
-**Features**
+    **Features**
 
-    * Google Sheets integration for user data storage
-    * JWT-based authentication
-    * Password hashing with bcrypt
-    * Google OAuth2 integration
-    * User session management
+        * Google Sheets integration for user data storage
+        * JWT-based authentication
+        * Password hashing with bcrypt
+        * Google OAuth2 integration
+        * User session management
 
-**API Endpoints**
+    **API Endpoints**
 
-    * GET /: Retrieve all users
-    * GET /{user_id}: Get user by ID
-    * POST /register: Register new user
-    * POST /login: User login
-    * POST /reset_password: Reset user password
-    * PUT /{user_id}: Update user
-    * DELETE /{user_id}: Delete user
-    * GET /google_signup: Google OAuth2 signup/login
-    * GET /protected: Protected route example
+        * GET /: Retrieve all users
+        * GET /{user_id}: Get user by ID
+        * POST /register: Register new user
+        * POST /login: User login
+        * POST /reset_password: Reset user password
+        * PUT /{user_id}: Update user
+        * DELETE /{user_id}: Delete user
+        * GET /google_signup: Google OAuth2 signup/login
+        * GET /protected: Protected route example
 
-**Configuration**
+    **Configuration**
 
-    * Uses Google Sheets API v4
-    * JWT token configuration
-    * OAuth2 credentials
-    * Password hashing settings
+        * Uses Google Sheets API v4
+        * JWT token configuration
+        * OAuth2 credentials
+        * Password hashing settings
 
-**Dependencies**
+    **Dependencies**
 
-    * FastAPI: Web framework
-    * google-auth: Google authentication
-    * bcrypt: Password hashing
-    * PyJWT: JWT token handling
-    * requests: HTTP client for OAuth2
+        * FastAPI: Web framework
+        * google-auth: Google authentication
+        * bcrypt: Password hashing
+        * PyJWT: JWT token handling
+        * requests: HTTP client for OAuth2
 """
 
 from fastapi import APIRouter, HTTPException, Depends, Query
@@ -75,44 +75,44 @@ router = APIRouter()
 ## Google Sheets Helper
 def get_google_sheets_service():
     """
-    Initialize and return Google Sheets service instance.
+        Initialize and return Google Sheets service instance.
 
-    **Input:**
+        **Input:**
 
-        None
-        
-    **Process:**
+            None
+            
+        **Process:**
 
-        1. Load credentials from service account file
-        2. Create Google Sheets API service
-        
-    **Output:**
+            1. Load credentials from service account file
+            2. Create Google Sheets API service
+            
+        **Output:**
 
-        - Google Sheets API service object
-        - Raises: Could fail if credentials are invalid
+            - Google Sheets API service object
+            - Raises: Could fail if credentials are invalid
     """
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
     """
-    Convert string values to appropriate Python types.
+        Convert string values to appropriate Python types.
 
-    **Input:**
+        **Input:**
 
-        - value (str): String value to convert
-        
-    **Process:**
+            - value (str): String value to convert
+            
+        **Process:**
 
-        1. Try converting to integer
-        2. Try converting to float
-        3. Try converting to boolean
-        4. Try parsing as datetime
-        5. Return original string if no conversion possible
-        
-    **Output:**
+            1. Try converting to integer
+            2. Try converting to float
+            3. Try converting to boolean
+            4. Try parsing as datetime
+            5. Return original string if no conversion possible
+            
+        **Output:**
 
-        - int/float/bool/datetime/str: Converted value
+            - int/float/bool/datetime/str: Converted value
     """
     try:
         if value.isdigit():
@@ -132,23 +132,23 @@ def convert_value(value: str):
 
 def check_username_exists(username: str) -> Optional[str]:
     """
-    Check if username exists in Google Sheets.
+        Check if username exists in Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - username (str): Username to check
-        
-    **Process:**
+            - username (str): Username to check
+            
+        **Process:**
 
-        1. Connect to Google Sheets service
-        2. Fetch all usernames
-        3. Search for matching username
-        
-    **Output:**
+            1. Connect to Google Sheets service
+            2. Fetch all usernames
+            3. Search for matching username
+            
+        **Output:**
 
-        - str: User ID if found
-        - None: If username not found
-        - HTTPException: 500 if Google Sheets error
+            - str: User ID if found
+            - None: If username not found
+            - HTTPException: 500 if Google Sheets error
     """
     try:
         sheets = get_google_sheets_service()
@@ -168,63 +168,63 @@ def check_username_exists(username: str) -> Optional[str]:
 ## Password Helper
 def hash_password(password: str) -> str:
     """
-    Hash password using bcrypt.
+        Hash password using bcrypt.
 
-    **Input:**
+        **Input:**
 
-        - password (str): Plain text password
-        
-    **Process:**
+            - password (str): Plain text password
+            
+        **Process:**
 
-        1. Generate salt
-        2. Hash password with salt
-        3. Return encoded hash
-        
-    **Output:**
+            1. Generate salt
+            2. Hash password with salt
+            3. Return encoded hash
+            
+        **Output:**
 
-        - str: Hashed password
+            - str: Hashed password
     """
     return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
-    Verify password against hashed version.
+        Verify password against hashed version.
 
-    **Input:**
+        **Input:**
 
-        - plain_password (str): Password to verify
-        - hashed_password (str): Stored hashed password
-        
-    **Process:**
+            - plain_password (str): Password to verify
+            - hashed_password (str): Stored hashed password
+            
+        **Process:**
 
-        1. Hash plain password
-        2. Compare with stored hash
-        
-    **Output:**
+            1. Hash plain password
+            2. Compare with stored hash
+            
+        **Output:**
 
-        - bool: True if password matches, False otherwise
+            - bool: True if password matches, False otherwise
     """
     return bcrypt.checkpw(plain_password.encode('utf-8'), hashed_password.encode('utf-8'))
 
 ## JWT Helper
 def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     """
-    Create JWT access token.
+        Create JWT access token.
 
-    **Input:**
+        **Input:**
 
-        - data (dict): Token payload data
-        - expires_delta (timedelta, optional): Token expiration time
-        
-    **Process:**
+            - data (dict): Token payload data
+            - expires_delta (timedelta, optional): Token expiration time
+            
+        **Process:**
 
-        1. Copy input data
-        2. Add expiration to payload
-        3. Generate JWT token
-        
-    **Output:**
+            1. Copy input data
+            2. Add expiration to payload
+            3. Generate JWT token
+            
+        **Output:**
 
-        - str: Encoded JWT token
+            - str: Encoded JWT token
     """
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
@@ -233,22 +233,22 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 def verify_token(token: str):
     """
-    Verify JWT token validity.
+        Verify JWT token validity.
 
-    **Input:**
+        **Input:**
 
-        - token (str): JWT token to verify
-        
-    **Process:**
+            - token (str): JWT token to verify
+            
+        **Process:**
 
-        1. Decode token using secret key
-        2. Verify signature and expiration
-        3. Extract user ID from payload
-        
-    **Output:**
+            1. Decode token using secret key
+            2. Verify signature and expiration
+            3. Extract user ID from payload
+            
+        **Output:**
 
-        - str: User ID from token
-        - HTTPException: 401 if token is invalid or expired
+            - str: User ID from token
+            - HTTPException: 401 if token is invalid or expired
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -264,24 +264,24 @@ def verify_token(token: str):
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_users():
     """
-    Retrieve all users from Google Sheets.
+        Retrieve all users from Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        None (HTTP GET request)
-        
-    **Process:**
+            None (HTTP GET request)
+            
+        **Process:**
 
-        1. Connect to Google Sheets service
-        2. Fetch all rows from user sheet
-        3. Convert values to appropriate types
-        4. Map rows to dictionaries
-        
-    **Output:**
+            1. Connect to Google Sheets service
+            2. Fetch all rows from user sheet
+            3. Convert values to appropriate types
+            4. Map rows to dictionaries
+            
+        **Output:**
 
-        - List[Dict]: List of user dictionaries
-        - HTTPException: 404 if no users found
-        - HTTPException: 500 if Google Sheets error
+            - List[Dict]: List of user dictionaries
+            - HTTPException: 404 if no users found
+            - HTTPException: 500 if Google Sheets error
     """
     try:
         sheets = get_google_sheets_service()
@@ -301,25 +301,25 @@ async def read_users():
 @router.post("/")
 async def create_user(user: Dict[str, Any]):
     """
-    Create new user in Google Sheets.
+        Create new user in Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - user (Dict[str, Any]): User data in dictionary format
-        
-    **Process:**
+            - user (Dict[str, Any]): User data in dictionary format
+            
+        **Process:**
 
-        1. Check if username already exists
-        2. Generate UUID for new user
-        3. Add creation timestamp
-        4. Convert user data to row format
-        5. Append row to Google Sheets
-        
-    **Output:**
+            1. Check if username already exists
+            2. Generate UUID for new user
+            3. Add creation timestamp
+            4. Convert user data to row format
+            5. Append row to Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message with new user ID
-        - HTTPException: 400 if username exists
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message with new user ID
+            - HTTPException: 400 if username exists
+            - HTTPException: 500 if Google Sheets error occurs
     """
     if check_username_exists(user.get("username")):
         raise HTTPException(status_code=400, detail="Username already exists")
@@ -344,25 +344,25 @@ async def create_user(user: Dict[str, Any]):
 @router.put("/{user_id}")
 async def update_user(user_id: str, updated_data: Dict[str, Any]):
     """
-    Update existing user by ID.
+        Update existing user by ID.
 
-    **Input:**
+        **Input:**
 
-        - user_id (str): UUID of user to update
-        - updated_data (Dict[str, Any]): New user data
-        
-    **Process:**
+            - user_id (str): UUID of user to update
+            - updated_data (Dict[str, Any]): New user data
+            
+        **Process:**
 
-        1. Find user row in Google Sheets
-        2. Merge existing data with updates
-        3. Convert updated data to row format
-        4. Execute update in Google Sheets
-        
-    **Output:**
+            1. Find user row in Google Sheets
+            2. Merge existing data with updates
+            3. Convert updated data to row format
+            4. Execute update in Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message
-        - HTTPException: 404 if user not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message
+            - HTTPException: 404 if user not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()
@@ -389,23 +389,23 @@ async def update_user(user_id: str, updated_data: Dict[str, Any]):
 @router.delete("/{user_id}")
 async def delete_user(user_id: str):
     """
-    Delete user by ID from Google Sheets.
+        Delete user by ID from Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - user_id (str): UUID of user to delete
-        
-    **Process:**
+            - user_id (str): UUID of user to delete
+            
+        **Process:**
 
-        1. Find user row in Google Sheets
-        2. Delete entire row using batch update
-        3. Execute deletion operation
-        
-    **Output:**
+            1. Find user row in Google Sheets
+            2. Delete entire row using batch update
+            3. Execute deletion operation
+            
+        **Output:**
 
-        - Dict: Success message
-        - HTTPException: 404 if user not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message
+            - HTTPException: 404 if user not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()
@@ -435,25 +435,25 @@ async def delete_user(user_id: str):
 @router.post("/register")
 async def register_user(user: Dict[str, Any]):
     """
-    Register new user with password hashing.
+        Register new user with password hashing.
 
-    **Input:**
+        **Input:**
 
-        - user (Dict[str, Any]): User registration data
-        
-    **Process:**
+            - user (Dict[str, Any]): User registration data
+            
+        **Process:**
 
-        1. Validate required fields
-        2. Check username availability
-        3. Hash password
-        4. Generate user ID and timestamp
-        5. Save to Google Sheets
-        
-    **Output:**
+            1. Validate required fields
+            2. Check username availability
+            3. Hash password
+            4. Generate user ID and timestamp
+            5. Save to Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message with user ID
-        - HTTPException: 400 if validation fails
-        - HTTPException: 500 if Google Sheets error
+            - Dict: Success message with user ID
+            - HTTPException: 400 if validation fails
+            - HTTPException: 500 if Google Sheets error
     """
     if not user.get("username") or not user.get("password"):
         raise HTTPException(status_code=400, detail="Username and password are required")
@@ -496,24 +496,24 @@ async def register_user(user: Dict[str, Any]):
 @router.post("/login")
 async def login(user: Dict[str, Any]):
     """
-    Authenticate user and generate token.
+        Authenticate user and generate token.
 
-    **Input:**
+        **Input:**
 
-        - user (Dict[str, Any]): Login credentials
-        
-    **Process:**
+            - user (Dict[str, Any]): Login credentials
+            
+        **Process:**
 
-        1. Validate credentials
-        2. Verify password
-        3. Generate access token
-        4. Prepare user response data
-        
-    **Output:**
+            1. Validate credentials
+            2. Verify password
+            3. Generate access token
+            4. Prepare user response data
+            
+        **Output:**
 
-        - Dict: Token and user data
-        - HTTPException: 401 if authentication fails
-        - HTTPException: 500 if Google Sheets error
+            - Dict: Token and user data
+            - HTTPException: 401 if authentication fails
+            - HTTPException: 500 if Google Sheets error
     """
     if not user.get("username") or not user.get("password"):
         raise HTTPException(status_code=400, detail="Username and password are required")
@@ -559,24 +559,24 @@ async def login(user: Dict[str, Any]):
 @router.get("/google_signup")
 async def google_signup(code: str = Query(...)):
     """
-    Handle Google OAuth2 signup/login flow.
+        Handle Google OAuth2 signup/login flow.
 
-    **Input:**
+        **Input:**
 
-        - code (str): Authorization code from Google
-        
-    **Process:**
+            - code (str): Authorization code from Google
+            
+        **Process:**
 
-        1. Exchange code for access token
-        2. Verify ID token
-        3. Check if user exists
-        4. Create new user if needed
-        5. Generate access token
-        
-    **Output:**
+            1. Exchange code for access token
+            2. Verify ID token
+            3. Check if user exists
+            4. Create new user if needed
+            5. Generate access token
+            
+        **Output:**
 
-        - RedirectResponse: Redirect with token
-        - HTTPException: Various error cases
+            - RedirectResponse: Redirect with token
+            - HTTPException: Various error cases
     """
     try:
         # **ขั้นตอนที่ 1: รับ token access จาก Google ด้วย code**
@@ -649,23 +649,23 @@ async def google_signup(code: str = Query(...)):
 @router.get("/{user_id}", response_model=Dict[str, Any])
 async def get_user_by_id(user_id: str):
     """
-    Retrieve user by ID from Google Sheets.
+        Retrieve user by ID from Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - user_id (str): UUID of user to retrieve
-        
-    **Process:**
+            - user_id (str): UUID of user to retrieve
+            
+        **Process:**
 
-        1. Connect to Google Sheets service
-        2. Find user row by ID
-        3. Convert row data to dictionary format
-        
-    **Output:**
+            1. Connect to Google Sheets service
+            2. Find user row by ID
+            3. Convert row data to dictionary format
+            
+        **Output:**
 
-        - Dict: User data dictionary
-        - HTTPException: 404 if user not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: User data dictionary
+            - HTTPException: 404 if user not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()
@@ -686,28 +686,28 @@ async def get_user_by_id(user_id: str):
 @router.post("/reset_password")
 async def reset_password(request: Dict[str, Any]):
     """
-    Reset user password.
+        Reset user password.
 
-    **Input:**
+        **Input:**
 
-        - request (Dict[str, Any]): Password reset data
-            - user_id: User ID
-            - old_password: Current password
-            - new_password: New password
-        
-    **Process:**
+            - request (Dict[str, Any]): Password reset data
+                - user_id: User ID
+                - old_password: Current password
+                - new_password: New password
+            
+        **Process:**
 
-        1. Validate input data
-        2. Find user in Google Sheets
-        3. Verify old password
-        4. Hash and update new password
-        
-    **Output:**
+            1. Validate input data
+            2. Find user in Google Sheets
+            3. Verify old password
+            4. Hash and update new password
+            
+        **Output:**
 
-        - Dict: Success/failure message
-        - HTTPException: 400 if validation fails
-        - HTTPException: 404 if user not found
-        - HTTPException: 500 if Google Sheets error
+            - Dict: Success/failure message
+            - HTTPException: 400 if validation fails
+            - HTTPException: 404 if user not found
+            - HTTPException: 500 if Google Sheets error
     """
     user_id = request.get("user_id")
     old_password = request.get("old_password")
@@ -752,21 +752,21 @@ async def reset_password(request: Dict[str, Any]):
 @router.get("/protected")
 async def protected_route(token: str = Depends(oauth2_scheme)):
     """
-    Protected route example requiring authentication.
+        Protected route example requiring authentication.
 
-    **Input:**
+        **Input:**
 
-        - token (str): JWT token from request header
-        
-    **Process:**
+            - token (str): JWT token from request header
+            
+        **Process:**
 
-        1. Verify token validity
-        2. Extract username from token
-        
-    **Output:**
+            1. Verify token validity
+            2. Extract username from token
+            
+        **Output:**
 
-        - Dict: Welcome message
-        - HTTPException: 401 if token invalid
+            - Dict: Welcome message
+            - HTTPException: 401 if token invalid
     """
     username = verify_token(token)
     return {"message": f"Hello, {username}"}

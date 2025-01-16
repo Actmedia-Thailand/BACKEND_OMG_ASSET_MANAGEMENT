@@ -1,37 +1,37 @@
 """
-Asset Management Module
-======================
+    Asset Management Module
+    ======================
 
-This module provides a FastAPI router for managing assets in a Google Sheets document.
-It implements CRUD operations for asset management.
+    This module provides a FastAPI router for managing assets in a Google Sheets document.
+    It implements CRUD operations for asset management.
 
-**Features**
+    **Features**
 
-    * Google Sheets integration for data storage
-    * Binary search implementation for efficient asset lookup
-    * Soft delete functionality
-    * Automatic UUID generation for new assets
-    * Type conversion utilities for Google Sheets data
+        * Google Sheets integration for data storage
+        * Binary search implementation for efficient asset lookup
+        * Soft delete functionality
+        * Automatic UUID generation for new assets
+        * Type conversion utilities for Google Sheets data
 
-**API Endpoints**
+    **API Endpoints**
 
-    * GET /: Retrieve all non-deleted assets
-    * POST /: Create a new asset
-    * PUT /{asset_id}: Update an existing asset
-    * DELETE /{asset_id}: Soft delete an asset
+        * GET /: Retrieve all non-deleted assets
+        * POST /: Create a new asset
+        * PUT /{asset_id}: Update an existing asset
+        * DELETE /{asset_id}: Soft delete an asset
 
-**Configuration**
+    **Configuration**
 
-    * Uses Google Sheets API v4
-    * Requires service account credentials
-    * Configurable sheet range and headers
-    * Environment variables for sensitive data
+        * Uses Google Sheets API v4
+        * Requires service account credentials
+        * Configurable sheet range and headers
+        * Environment variables for sensitive data
 
-**Dependencies**
+    **Dependencies**
 
-    * FastAPI: Web framework
-    * google-auth: Google authentication
-    * google-api-python-client: Google Sheets API client
+        * FastAPI: Web framework
+        * google-auth: Google authentication
+        * google-api-python-client: Google Sheets API client
 """
 from fastapi import APIRouter, HTTPException
 from google.oauth2.service_account import Credentials
@@ -58,42 +58,42 @@ router = APIRouter()
 
 def get_google_sheets_service():
     """
-    Initialize and return Google Sheets service instance.
+        Initialize and return Google Sheets service instance.
 
-    **Input:**
+        **Input:**
 
-        None
-        
-    **Process:**
+            None
+            
+        **Process:**
 
-        1. Load credentials from service account file
-        2. Create Google Sheets API service with specified credentials
-        
-    **Output:**
+            1. Load credentials from service account file
+            2. Create Google Sheets API service with specified credentials
+            
+        **Output:**
 
-        - Google Sheets API service object
+            - Google Sheets API service object
     """
     creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
     return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
     """
-    Convert string values to appropriate Python types.
+        Convert string values to appropriate Python types.
 
-    **Input:**
+        **Input:**
 
-        - value (str): String value to convert
-        
-    **Process:**
+            - value (str): String value to convert
+            
+        **Process:**
 
-        1. Try converting to integer if string contains only digits
-        2. Try converting to float if possible
-        3. Try converting to boolean if string is "true" or "false"
-        4. Return stripped string if no conversion possible
-        
-    **Output:**
+            1. Try converting to integer if string contains only digits
+            2. Try converting to float if possible
+            3. Try converting to boolean if string is "true" or "false"
+            4. Return stripped string if no conversion possible
+            
+        **Output:**
 
-        - int/float/bool/str: Converted value based on input type
+            - int/float/bool/str: Converted value based on input type
     """
     try:
         if value.isdigit():
@@ -114,22 +114,22 @@ def convert_value(value: str):
 
 def binary_search_by_index(values: list, target: str) -> int:
     """
-    Perform binary search on Google Sheets values to find target asset.
+        Perform binary search on Google Sheets values to find target asset.
 
-    **Input:**
+        **Input:**
 
-        - values (list): List of rows from Google Sheets
-        - target (str): Asset ID to search for
-        
-    **Process:**
+            - values (list): List of rows from Google Sheets
+            - target (str): Asset ID to search for
+            
+        **Process:**
 
-        1. Sort values based on first column (excluding header)
-        2. Perform binary search on sorted values
-        3. Convert found index back to original row number
-        
-    **Output:**
+            1. Sort values based on first column (excluding header)
+            2. Perform binary search on sorted values
+            3. Convert found index back to original row number
+            
+        **Output:**
 
-        - int: Row number (1-based) if found, -1 if not found
+            - int: Row number (1-based) if found, -1 if not found
     """
     if not values or len(values) < 2:
         return -1  # Handle cases with no data or just a header
@@ -160,24 +160,24 @@ def binary_search_by_index(values: list, target: str) -> int:
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets():
     """
-    Retrieve all non-deleted assets from Google Sheets.
+        Retrieve all non-deleted assets from Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        None (HTTP GET request)
-        
-    **Process:**
+            None (HTTP GET request)
+            
+        **Process:**
 
-        1. Connect to Google Sheets service
-        2. Fetch all rows from specified range
-        3. Parse values and convert to appropriate types
-        4. Filter out deleted assets (isDelete = 1)
-        
-    **Output:**
+            1. Connect to Google Sheets service
+            2. Fetch all rows from specified range
+            3. Parse values and convert to appropriate types
+            4. Filter out deleted assets (isDelete = 1)
+            
+        **Output:**
 
-        - List[Dict]: List of asset dictionaries
-        - HTTPException: 404 if no assets found
-        - HTTPException: 500 if Google Sheets error occurs
+            - List[Dict]: List of asset dictionaries
+            - HTTPException: 404 if no assets found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         sheets = get_google_sheets_service()
@@ -214,24 +214,24 @@ async def read_assets():
 @router.post("/")
 async def create_asset(asset: Dict[str, Any]):
     """
-    Create new asset in Google Sheets.
+        Create new asset in Google Sheets.
 
-    **Input:**
+        **Input:**
 
-        - asset (Dict[str, Any]): Asset data in dictionary format
-        
-    **Process:**
+            - asset (Dict[str, Any]): Asset data in dictionary format
+            
+        **Process:**
 
-        1. Generate UUID for new asset
-        2. Add creation timestamp
-        3. Set isDelete flag to 0
-        4. Convert asset dict to row format
-        5. Append row to Google Sheets
-        
-    **Output:**
+            1. Generate UUID for new asset
+            2. Add creation timestamp
+            3. Set isDelete flag to 0
+            4. Convert asset dict to row format
+            5. Append row to Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message with new asset ID
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message with new asset ID
+            - HTTPException: 500 if Google Sheets error occurs
     """
     asset["id"] = str(uuid4())
     asset["createdOn"] = datetime.now().isoformat()
@@ -252,24 +252,24 @@ async def create_asset(asset: Dict[str, Any]):
 @router.put("/{asset_id}")
 async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
     """
-    Update existing asset by ID.
+        Update existing asset by ID.
 
-    **Input:**
+        **Input:**
 
-        - asset_id (str): UUID of asset to update
-        - updated_data (Dict[str, Any]): New asset data
-        
-    **Process:**
+            - asset_id (str): UUID of asset to update
+            - updated_data (Dict[str, Any]): New asset data
+            
+        **Process:**
 
-        1. Find asset row using binary search
-        2. Create update operations for changed fields
-        3. Execute batch update in Google Sheets
-        
-    **Output:**
+            1. Find asset row using binary search
+            2. Create update operations for changed fields
+            3. Execute batch update in Google Sheets
+            
+        **Output:**
 
-        - Dict: Success message
-        - HTTPException: 404 if asset not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message
+            - HTTPException: 404 if asset not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         # Initialize Google Sheets service
@@ -309,22 +309,22 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
 @router.delete("/{asset_id}")
 async def delete_asset(asset_id: str):
     """
-    Soft delete asset by setting isDelete flag.
+        Soft delete asset by setting isDelete flag.
 
-    **Input:**
+        **Input:**
 
-        - asset_id (str): UUID of asset to delete
-        
-    **Process:**
+            - asset_id (str): UUID of asset to delete
+            
+        **Process:**
 
-        1. Find asset row using binary search
-        2. Update isDelete column to 1
-        
-    **Output:**
+            1. Find asset row using binary search
+            2. Update isDelete column to 1
+            
+        **Output:**
 
-        - Dict: Success message
-        - HTTPException: 404 if asset not found
-        - HTTPException: 500 if Google Sheets error occurs
+            - Dict: Success message
+            - HTTPException: 404 if asset not found
+            - HTTPException: 500 if Google Sheets error occurs
     """
     try:
         # Initialize Google Sheets service
