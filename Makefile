@@ -11,7 +11,7 @@ else # macOS/Linux
 endif
 
 # Command to run uvicorn server
-RUN_UVICORN = uvicorn main:app --host 127.0.0.1 --port 8000 --no-access-log --reload
+RUN_UVICORN = uvicorn app.main:app --host 127.0.0.1 --port 8000 --no-access-log --reload
 
 # Default target to set up environment and run the server
 run:
@@ -20,6 +20,11 @@ run:
 # Install dependencies from requirements.txt
 install:
 	$(ACTIVATE) && pip install -r requirements.txt
+
+# Install a specific package and update requirements.txt
+i:
+	$(ACTIVATE) && pip install $(word 2, $(MAKECMDGOALS))
+	$(ACTIVATE) && pip freeze > requirements.txt
 
 # Create a new virtual environment (if .venv does not exist)
 create-venv:
