@@ -34,6 +34,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.user import router as user_router
 from app.asset import router as asset_router
+from app.asset_example import router as asset_example_router
 from app.view import router as view_router
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -65,3 +66,4 @@ app.state.limiter = limiter  # Set the limiter to the app's state
 app.include_router(user_router, prefix="/users", tags=["Users"])
 app.include_router(view_router, prefix="/view", tags=["View"])
 app.include_router(asset_router, prefix="/asset", tags=["Asset"])
+app.include_router(asset_example_router, prefix="/asset_example", tags=["Asset_Example"])
