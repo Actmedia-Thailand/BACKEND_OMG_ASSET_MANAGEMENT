@@ -49,7 +49,7 @@ SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
-HEADERS = ["UID", "QR Code", "MACADDRESS", "assetTypeId", "Asset Name", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "displayArrangement", "displayPosition", "ConnectVia", "wifiSsid", "ProjectName", "screen Position Side", "setMacAddress", "Phone", "DongleWifi", "Asset name", "isDelete"]
+HEADERS = ["id", "QR Code", "MACADDRESS", "assetTypeId", "Asset Name", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "displayArrangement", "displayPosition", "ConnectVia", "wifiSsid", "ProjectName", "screen Position Side", "setMacAddress", "Phone", "DongleWifi", "Asset name", "isDelete"]
 """ list of headers in the Google Sheets document same as key of json file """
 
 router = APIRouter()
@@ -246,7 +246,7 @@ async def create_asset(asset: Dict[str, Any]):
             valueInputOption="RAW",
             body={"values": [row_to_add]}
         ).execute()
-        return {"message": "Asset created successfully", "id": asset["UID"]}
+        return {"message": "Asset created successfully", "id": asset["id"]}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
