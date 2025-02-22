@@ -236,8 +236,6 @@ async def create_asset(asset: Dict[str, Any]):
             - Dict: Success message with new asset ID
             - HTTPException: 500 if Google Sheets error occurs
     """
-    asset["id"] = str(uuid4())
-    asset["createdOn"] = datetime.now().isoformat()
     asset["isDelete"] = 0  # Default to not deleted
     try:
         sheets = get_google_sheets_service()
@@ -248,7 +246,7 @@ async def create_asset(asset: Dict[str, Any]):
             valueInputOption="RAW",
             body={"values": [row_to_add]}
         ).execute()
-        return {"message": "Asset created successfully", "id": asset["id"]}
+        return {"message": "Asset created successfully", "id": asset["UID"]}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
