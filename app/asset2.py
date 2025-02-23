@@ -180,7 +180,7 @@ async def read_assets():
 
             1. Connect to Google Sheets service
             2. Fetch all rows from specified range
-            3. Parse values and convert to appropriate types
+            3. Parse values: JSON objects to string, "1"/"0" to int, others to string
             4. Filter out deleted assets (isDelete = 1)
             
         **Output:**
@@ -199,25 +199,32 @@ async def read_assets():
         headers = values[0]  # First row as headers
         
         def parse_value(value):
-            try:
-                # Attempt to parse as JSON
-                return json.loads(value)
-            except (ValueError, TypeError):
-                # If value is "1" or "0", convert to int
-                if value == "1":
-                    return 1
-                elif value == "0":
-                    return 0
-                return value  # Return as string if not JSON
+            if value == "1":
+                return 1  # แปลง "1" เป็น int
+            elif value == "0":
+                return 0  # แปลง "0" เป็น int
+            elif value is None:
+                return ""  # ค่าไม่มีให้เป็น string ว่าง
+            elif isinstance(value, str):
+                try:
+                    # ถ้าเป็น JSON string แปลงเป็น object แล้วกลับเป็น string
+                    parsed = json.loads(value)
+                    if isinstance(parsed, dict):  # ถ้าเป็น object (dict)
+                        return json.dumps(parsed, ensure_ascii=False)  # คืนเป็น JSON string
+                    return parsed  # ถ้าไม่ใช่ dict (เช่น list หรือ number) คืนตามที่แปลงได้
+                except (ValueError, TypeError):
+                    return value  # ถ้าไม่ใช่ JSON คืนเป็น string เดิม
+            return str(value)  # ค่าอื่นๆ ที่ไม่เข้าข่าย แปลงเป็น string
 
-        # Parse rows into dictionaries
+        # แปลงข้อมูลในแถวเป็น dictionary
         data = [
             {headers[i]: parse_value(cell) for i, cell in enumerate(row)}
             for row in values[1:]
         ]
         
-        # Exclude views where isDelete is 1
+        # กรองเฉพาะแถวที่ isDelete ไม่ใช่ 1
         return [view for view in data if view.get("isDelete") != 1]
+    
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
