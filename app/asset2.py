@@ -41,6 +41,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from uuid import uuid4
 import json
+import requests
 
 # === Configuration ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -155,6 +156,25 @@ def binary_search_by_index(values: list, target: str) -> int:
 
     return -1  # Not found
 
+def get_column_letter(col_index: int) -> str:
+    """Convert column index to Google Sheets column letter (A, B, ..., Z, AA, AB, ...)"""
+    col_letter = ""
+    while col_index > 0:
+        col_index, remainder = divmod(col_index - 1, 26)
+        col_letter = chr(65 + remainder) + col_letter
+    return col_letter
+
+APPS_SCRIPT_URL = "https://script.googleusercontent.com/macros/echo?user_content_key=TTKc66ZRG_jTKZf23ObT-AxT3yv--Hbz-sxxfjfde47HqneCSufqUE3mGD2rHViDW6DVFmvExV-hjltVDdn-XiTp75MG51_Pm5_BxDlH2jW0nuo2oDemN9CCS2h10ox_1xSncGQajx_ryfhECjZEnLudG6TJ-hW_mKrFr619CbRKmN5wpvo-EeYartXdpdLVnSbueTnlGr9aj3kvxdcq04Ej-l4JQQTCff_VIm4Zz9W8cv7vWJ9jUQ&lib=MJWqhT8f-weSgF29CkRPNiukPFaKBQZDJ"
+
+def get_next_id():
+    """Fetch the next available ID from Google Apps Script API"""
+    try:
+        response = requests.get(APPS_SCRIPT_URL)
+        response.raise_for_status()
+        return response.json().get("nextId")
+    except requests.RequestException as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fetch next ID: {str(e)}")
+
 # === CRUD Routes for Asset ===
 
 @router.get("/", response_model=List[Dict[str, Any]])
@@ -237,6 +257,7 @@ async def create_asset(asset: Dict[str, Any]):
             - HTTPException: 500 if Google Sheets error occurs
     """
     asset["isDelete"] = 0  # Default to not deleted
+    asset["id"] = get_next_id()  # Get the next ID from Apps Script API
     try:
         sheets = get_google_sheets_service()
         row_to_add = [asset.get(header, "") for header in HEADERS]
@@ -280,7 +301,7 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
         if "id" not in HEADERS:
             raise HTTPException(status_code=500, detail="ID column not defined in headers")
         id_column_index = HEADERS.index("id") + 1  # 1-based index for Google Sheets
-        id_column_letter = chr(64 + id_column_index)  # Convert index to column letter
+        id_column_letter = get_column_letter(id_column_index)  # Convert index to column letter
 
         # Fetch the "id" column dynamically
         result = sheets.values().get(
@@ -293,16 +314,24 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
         row_number = binary_search_by_index(values, asset_id)
         if row_number == -1:
             raise HTTPException(status_code=404, detail="Asset not found")
+        
         updates = []
         for header, value in updated_data.items():
             if header in HEADERS:
                 col_index = HEADERS.index(header) + 1
+                col_letter = get_column_letter(col_index)
+                cell_value = value if isinstance(value, (int, float)) else str(value)
                 updates.append({
-                    "range": f"{ASSET_SHEET_RANGE}!{chr(64 + col_index)}{row_number}",
-                    "values": [[str(value)]]
+                    "range": f"{ASSET_SHEET_RANGE}!{col_letter}{row_number}",
+                    "values": [[cell_value]]
                 })
+        
         if updates:
-            sheets.values().batchUpdate(spreadsheetId=SPREADSHEET_ID, body={"data": updates, "valueInputOption": "RAW"}).execute()
+            sheets.values().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID, 
+                body={"data": updates, "valueInputOption": "RAW"}
+            ).execute()
+        
         return {"message": "Asset updated successfully"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
@@ -335,7 +364,8 @@ async def delete_asset(asset_id: str):
         if "id" not in HEADERS:
             raise HTTPException(status_code=500, detail="ID column not defined in headers")
         id_column_index = HEADERS.index("id") + 1  # 1-based index for Google Sheets
-        id_column_letter = chr(64 + id_column_index)  # Convert index to column letter
+        id_column_letter = get_column_letter(id_column_index)
+  # Convert index to column letter
 
         # Fetch the "id" column dynamically
         result = sheets.values().get(
@@ -351,7 +381,7 @@ async def delete_asset(asset_id: str):
         col_index = HEADERS.index("isDelete") + 1
         sheets.values().update(
             spreadsheetId=SPREADSHEET_ID,
-            range=f"{ASSET_SHEET_RANGE}!{chr(64 + col_index)}{row_number}",
+            range=f"{ASSET_SHEET_RANGE}!{get_column_letter(col_index)}{row_number}",
             valueInputOption="RAW",
             body={"values": [[1]]}
         ).execute()
