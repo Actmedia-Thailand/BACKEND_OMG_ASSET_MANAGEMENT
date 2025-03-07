@@ -41,6 +41,7 @@ from datetime import datetime
 from typing import List, Dict, Any
 from uuid import uuid4
 import json
+import asyncio
 
 # === Configuration ===
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
@@ -50,6 +51,60 @@ VIEW_SHEET_RANGE = 'View'  #! Specify the range for the View sheet
 HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group", "isDelete", "createdOn"]
 
 router = APIRouter()
+
+async def update_headers_from_sheet():
+    """
+        Fetch headers from the first row of Google Sheets and update HEADERS global variable.
+
+        **Process:**
+            1. Connect to Google Sheets service
+            2. Fetch first row from specified range
+            3. Update global HEADERS variable with new values
+            
+        **Output:**
+            None (updates global HEADERS)
+    """
+    global HEADERS
+    try:
+        sheets = get_google_sheets_service()
+        result = sheets.values().get(
+            spreadsheetId=SPREADSHEET_ID, 
+            range=f"{VIEW_SHEET_RANGE}!1:1"  # Fetch only first row
+        ).execute()
+        values = result.get("values", [])
+        if not values or not values[0]:
+            print("No headers found in Google Sheets")
+            return
+        
+        # Update HEADERS with values from first row
+        HEADERS = [header.strip() for header in values[0] if header]  # Remove empty headers and strip whitespace
+        print(f"Updated HEADERS: {HEADERS}")
+    except HttpError as e:
+        print(f"Failed to update headers: {e}")
+
+async def periodic_header_update():
+    """
+        Periodically update HEADERS every 10 minutes by calling update_headers_from_sheet.
+
+        **Process:**
+            1. Run infinite loop
+            2. Call update_headers_from_sheet
+            3. Wait 10 minutes before next iteration
+            
+        **Output:**
+            None (runs continuously)
+    """
+    while True:
+        await update_headers_from_sheet()
+        await asyncio.sleep(3600)  # time to re-load in sec
+
+# Start the periodic task when the application starts
+@router.on_event("startup")
+async def startup_event():
+    """
+        Start the periodic header update task when the FastAPI app starts.
+    """
+    asyncio.create_task(periodic_header_update())
 
 def get_google_sheets_service():
     """
