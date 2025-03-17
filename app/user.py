@@ -55,10 +55,9 @@ from uuid import uuid4
 import requests
 import bcrypt
 import jwt
+from app.sheets_service import get_google_sheets_service
 
 # === Configuration ===
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 USER_SHEET_RANGE = 'User'
 
@@ -73,26 +72,6 @@ router = APIRouter()
 # === Helper Functions ===
 
 ## Google Sheets Helper
-def get_google_sheets_service():
-    """
-        Initialize and return Google Sheets service instance.
-
-        **Input:**
-
-            None
-            
-        **Process:**
-
-            1. Load credentials from service account file
-            2. Create Google Sheets API service
-            
-        **Output:**
-
-            - Google Sheets API service object
-            - Raises: Could fail if credentials are invalid
-    """
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
     """

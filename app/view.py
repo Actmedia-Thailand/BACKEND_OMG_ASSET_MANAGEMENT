@@ -42,10 +42,8 @@ from typing import List, Dict, Any
 from uuid import uuid4
 import json
 import asyncio
+from app.sheets_service import get_google_sheets_service
 
-# === Configuration ===
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SERVICE_ACCOUNT_FILE = './credentials.json'  #! Should be stored in ENV
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! Should be stored in ENV
 VIEW_SHEET_RANGE = 'View'  #! Specify the range for the View sheet
 HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group", "isDelete", "createdOn"]
@@ -96,7 +94,7 @@ async def periodic_header_update():
     """
     while True:
         await update_headers_from_sheet()
-        await asyncio.sleep(3600)  # time to re-load in sec
+        await asyncio.sleep(21600)  # time to re-load in sec
 
 # Start the periodic task when the application starts
 @router.on_event("startup")
@@ -106,26 +104,12 @@ async def startup_event():
     """
     asyncio.create_task(periodic_header_update())
 
-def get_google_sheets_service():
-    """
-        Initialize and return Google Sheets service instance.
+# หรือเพิ่ม endpoint
+@router.post("/update-headers")
+async def manual_update_headers():
+    await update_headers_from_sheet()
+    return {"message": "Headers updated"}
 
-        **Input:**
-
-            None
-            
-        **Process:**
-
-            1. Load credentials from service account file
-            2. Create Google Sheets API service
-            
-        **Output:**
-
-            - Google Sheets API service object
-            - Raises: Could fail if credentials are invalid
-    """
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return build('sheets', 'v4', credentials=creds).spreadsheets()
 
 def convert_value(value: str):
     """

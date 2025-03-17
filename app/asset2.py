@@ -42,12 +42,9 @@ from typing import List, Dict, Any
 from uuid import uuid4
 import json
 import asyncio
-
+from app.sheets_service import get_google_sheets_service
 
 # === Configuration ===
-SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
-SERVICE_ACCOUNT_FILE = './credentials.json'  #! ควรเก็บใน ENV
-""" credentials file declared in the Google Cloud Platform """
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
@@ -102,27 +99,21 @@ async def periodic_header_update():
     """
     while True:
         await update_headers_from_sheet()
-        await asyncio.sleep(3600)  # time to re-load in sec
+        await asyncio.sleep(21600)  # time to re-load in sec
 
-def get_google_sheets_service():
+# Start the periodic task when the application starts
+@router.on_event("startup")
+async def startup_event():
     """
-        Initialize and return Google Sheets service instance.
-
-        **Input:**
-
-            None
-            
-        **Process:**
-
-            1. Load credentials from service account file
-            2. Create Google Sheets API service with specified credentials
-            
-        **Output:**
-
-            - Google Sheets API service object
+        Start the periodic header update task when the FastAPI app starts.
     """
-    creds = Credentials.from_service_account_file(SERVICE_ACCOUNT_FILE, scopes=SCOPES)
-    return build('sheets', 'v4', credentials=creds).spreadsheets()
+    asyncio.create_task(periodic_header_update())
+
+# หรือเพิ่ม endpoint
+@router.post("/update-headers")
+async def manual_update_headers():
+    await update_headers_from_sheet()
+    return {"message": "Headers updated"}
 
 def convert_value(value: str):
     """
@@ -432,12 +423,4 @@ async def delete_asset(asset_id: str):
         return {"message": "Asset marked as deleted"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
-
-# Start the periodic task when the application starts
-@router.on_event("startup")
-async def startup_event():
-    """
-        Start the periodic header update task when the FastAPI app starts.
-    """
-    asyncio.create_task(periodic_header_update())
 
