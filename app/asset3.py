@@ -212,27 +212,25 @@ cache = TTLCache(maxsize=1, ttl=300)  # Cache สูงสุด 1 item, หม�
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets():
     """
-        Retrieve all non-deleted assets from Google Sheets as a tree structure.
+    Retrieve all non-deleted assets from Google Sheets as a tree structure.
 
-        **Input:**
-            None (HTTP GET request)
-            
-        **Process:**
-            1. Check in-memory cache for existing data
-            2. Connect to Google Sheets service
-            3. Fetch all rows from specified range
-            4. Parse values: JSON objects to string, "1"/"0" to int, others to string
-            5. Filter out deleted assets (isDelete = 1) and children of deleted parents
-            6. Build tree structure with subrow for children
-            7. Cache the result
-            8. Return tree structure
-            
-        **Output:**
-            - List[Dict]: List of asset dictionaries with subrow for children
-            - HTTPException: 404 if no assets found
-            - HTTPException: 500 if Google Sheets error occurs
+    **Process:**
+        1. Check in-memory cache for existing data
+        2. Connect to Google Sheets service
+        3. Fetch all rows from specified range
+        4. Parse values: JSON objects to string, "1"/"0" to int, others to string
+        5. Filter out deleted assets (isDelete = 1) and children of deleted parents
+        6. Build tree structure with subRows for children
+        7. Cache the result
+        8. Return tree structure
+
+    **Output:**
+        - List[Dict]: List of asset dictionaries with subRows for children
+        - HTTPException: 404 if no assets found
+        - HTTPException: 500 if Google Sheets error occurs
     """
-    # ตรวจสอบ cache
+
+    cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
     if "assets" in cache:
         return cache["assets"]
 
@@ -242,17 +240,17 @@ async def read_assets():
         values = result.get("values", [])
         if not values:
             raise HTTPException(status_code=404, detail="No assets found")
-        
-        headers = values[0]  # First row as headers
-        
+
+        headers = values[0]
+
         def parse_value(value):
             if value == "1":
                 return 1
-            elif value == "0":
+            if value == "0":
                 return 0
-            elif value is None:
+            if value is None:
                 return ""
-            elif isinstance(value, str):
+            if isinstance(value, str):
                 try:
                     parsed = json.loads(value)
                     if isinstance(parsed, dict):
@@ -262,48 +260,36 @@ async def read_assets():
                     return value
             return str(value)
 
-        # แปลงข้อมูลเป็น dictionary
         data = [
             {headers[i]: parse_value(cell) for i, cell in enumerate(row) if i < len(headers)}
             for row in values[1:]
         ]
-        
-        # สร้าง nodes_map และ children_map
+
         nodes_map = {node["id"]: node for node in data}
-        
-        children_map = {}
         for node in data:
-            if "isDelete" not in node:
-                node["isDelete"] = 1  # Default to deleted if missing
-            if "parentId" not in node:
-                node["parentId"] = ""
-            
-            # เก็บเฉพาะ node ที่ไม่ถูกลบ และ parent (ถ้ามี) ไม่ถูกลบ
-            parent = nodes_map.get(node["parentId"], {}) if node["parentId"] else {}
-            if node["isDelete"] == 0 and (not node["parentId"] or parent.get("isDelete", 1) == 0):
-                parent_id = node["parentId"] or None
-                if parent_id:
-                    children_map.setdefault(parent_id, []).append(node)
-        
-        # สร้าง tree structure
+            node.setdefault("isDelete", 1)
+            node.setdefault("parentId", "")
+            # ถ้ามี parentId และโหนดแม่ถูกลบ ตั้ง parentId เป็น ""
+            if node["parentId"]:
+                parent = nodes_map.get(node["parentId"], {})
+                if parent.get("isDelete", 1) == 1:
+                    node["parentId"] = ""
+
         def build_tree(parent_id=None):
             tree = []
             for node in nodes_map.values():
-                # จัดการ parentId เป็น '' หรือ None
-                node_parent_id = node.get("parentId", "")
-                is_root = not node_parent_id or node_parent_id not in nodes_map or nodes_map[node_parent_id].get("isDelete", 1) == 1
-                # รวม node ที่ไม่ถูกลบ และเป็น root หรือมี parentId ตรง
-                if node.get("isDelete", 1) == 0 and (parent_id is None and is_root or node_parent_id == parent_id):
+                node_parent_id = node["parentId"]
+                is_root = not node_parent_id or node_parent_id not in nodes_map or nodes_map[node_parent_id]["isDelete"] == 1
+                if node["isDelete"] == 0 and (parent_id is None and is_root or node_parent_id == parent_id):
                     node_copy = node.copy()
-                    node_copy["subrow"] = build_tree(node["id"])
+                    node_copy["subRows"] = build_tree(node["id"])
                     tree.append(node_copy)
             return tree
-        
-        # สร้าง tree และ cache
+
         tree = build_tree()
         cache["assets"] = tree
         return tree
-    
+
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
