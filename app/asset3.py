@@ -206,8 +206,8 @@ def get_column_letter(col_index: int) -> str:
 
 # === CRUD Routes for Asset ===
 
-# In-memory cache ด้วย TTL 5 นาที
-cache = TTLCache(maxsize=1, ttl=300)  # Cache สูงสุด 1 item, หมดอายุใน 300 วินาที
+# In-memory cache 
+cache = TTLCache(maxsize=1, ttl=21600)  # Cache สูงสุด 1 item, หมดอายุใน 6 ชั่วโมง
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets():
@@ -230,7 +230,7 @@ async def read_assets():
         - HTTPException: 500 if Google Sheets error occurs
     """
 
-    cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
+    # cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
     if "assets" in cache:
         return cache["assets"]
 
@@ -329,6 +329,7 @@ async def create_asset(asset: Dict[str, Any]):
             valueInputOption="RAW",
             body={"values": [row_to_add]}
         ).execute()
+        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
         return asset
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
@@ -393,7 +394,7 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
                 spreadsheetId=SPREADSHEET_ID, 
                 body={"data": updates, "valueInputOption": "RAW"}
             ).execute()
-        
+        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
         return {"message": "Asset updated successfully"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
@@ -447,7 +448,22 @@ async def delete_asset(asset_id: str):
             valueInputOption="RAW",
             body={"values": [[1]]}
         ).execute()
+        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
         return {"message": "Asset marked as deleted"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
+@router.post("/clear-cache")
+async def clear_cache():
+    """
+    Clear the in-memory cache.
+
+    **Process:**
+        1. Clear the TTLCache
+        2. Return success message
+
+    **Output:**
+        - Dict: Success message
+    """
+    cache.clear()
+    return {"message": "Cache cleared successfully"}
