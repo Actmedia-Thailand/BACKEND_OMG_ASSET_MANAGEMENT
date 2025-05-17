@@ -47,7 +47,7 @@ from cachetools import TTLCache
 
 # === Configuration ===
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
-ASSET_SHEET_RANGE = 'Test Asset3'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
+ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
 HEADERS = ["id", "QR Code", "MACADDRESS", "assetTypeId", "Asset Name", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "displayArrangement", "displayPosition", "ConnectVia", "wifiSsid", "ProjectName", "screen Position Side", "setMacAddress", "Phone", "DongleWifi", "Asset name","parentId","isDelete"]
 """ list of headers in the Google Sheets document same as key of json file """
@@ -82,7 +82,6 @@ async def update_headers_from_sheet():
         
         # Update HEADERS with values from first row
         HEADERS = [header.strip() for header in values[0] if header]  # Remove empty headers and strip whitespace
-        print(f"Updated HEADERS: {HEADERS}")
     except HttpError as e:
         print(f"Failed to update headers: {e}")
 
@@ -232,8 +231,9 @@ async def read_assets():
 
     # cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
     if "assets" in cache:
+        print("Cache hit")
         return cache["assets"]
-
+    print("Reading from Google Sheets")
     try:
         sheets = get_google_sheets_service()
         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=ASSET_SHEET_RANGE).execute()
