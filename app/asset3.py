@@ -44,6 +44,7 @@ import json
 import asyncio
 from app.sheets_service import get_google_sheets_service
 from cachetools import TTLCache
+from collections import defaultdict
 
 # === Configuration ===
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
@@ -213,23 +214,16 @@ async def read_assets():
     """
     Retrieve all non-deleted assets from Google Sheets as a tree structure.
 
-    **Process:**
-        1. Check in-memory cache for existing data
-        2. Connect to Google Sheets service
-        3. Fetch all rows from specified range
-        4. Parse values: JSON objects to string, "1"/"0" to int, others to string
-        5. Filter out deleted assets (isDelete = 1) and children of deleted parents
-        6. Build tree structure with subRows for children
-        7. Cache the result
-        8. Return tree structure
-
-    **Output:**
-        - List[Dict]: List of asset dictionaries with subRows for children
-        - HTTPException: 404 if no assets found
-        - HTTPException: 500 if Google Sheets error occurs
+    Process:
+        1. Check cache
+        2. Fetch data from Google Sheets
+        3. Parse values
+        4. Filter out deleted nodes and children of deleted parents
+        5. Build children_map (parentId -> list of children)
+        6. Recursively build tree from children_map
+        7. Cache and return tree
     """
 
-    # cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
     if "assets" in cache:
         print("Cache hit")
         return cache["assets"]
@@ -265,25 +259,31 @@ async def read_assets():
             for row in values[1:]
         ]
 
+        # สร้าง map id->node เพื่อเช็ค parent later
         nodes_map = {node["id"]: node for node in data}
+
+        # กำหนดค่า default และแก้ไข parentId ถ้า parent ถูกลบ
         for node in data:
             node.setdefault("isDelete", 1)
             node.setdefault("parentId", "")
-            # ถ้ามี parentId และโหนดแม่ถูกลบ ตั้ง parentId เป็น ""
             if node["parentId"]:
                 parent = nodes_map.get(node["parentId"], {})
                 if parent.get("isDelete", 1) == 1:
                     node["parentId"] = ""
 
-        def build_tree(parent_id=None):
+        # สร้าง children_map: parentId -> list of child nodes
+        children_map = defaultdict(list)
+        for node in data:
+            if node["isDelete"] == 0:
+                children_map[node["parentId"]].append(node)
+
+        # ฟังก์ชันสร้าง tree จาก children_map
+        def build_tree(parent_id=""):
             tree = []
-            for node in nodes_map.values():
-                node_parent_id = node["parentId"]
-                is_root = not node_parent_id or node_parent_id not in nodes_map or nodes_map[node_parent_id]["isDelete"] == 1
-                if node["isDelete"] == 0 and (parent_id is None and is_root or node_parent_id == parent_id):
-                    node_copy = node.copy()
-                    node_copy["subRows"] = build_tree(node["id"])
-                    tree.append(node_copy)
+            for node in children_map.get(parent_id, []):
+                node_copy = node.copy()
+                node_copy["subRows"] = build_tree(node["id"])
+                tree.append(node_copy)
             return tree
 
         tree = build_tree()
