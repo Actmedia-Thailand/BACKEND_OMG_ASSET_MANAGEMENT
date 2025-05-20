@@ -44,10 +44,11 @@ import json
 import asyncio
 from app.sheets_service import get_google_sheets_service
 from cachetools import TTLCache
+from collections import defaultdict
 
 # === Configuration ===
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
-ASSET_SHEET_RANGE = 'Test Asset3'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
+ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
 HEADERS = ["id", "QR Code", "MACADDRESS", "assetTypeId", "Asset Name", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "displayArrangement", "displayPosition", "ConnectVia", "wifiSsid", "ProjectName", "screen Position Side", "setMacAddress", "Phone", "DongleWifi", "Asset name","parentId","isDelete"]
 """ list of headers in the Google Sheets document same as key of json file """
@@ -82,7 +83,6 @@ async def update_headers_from_sheet():
         
         # Update HEADERS with values from first row
         HEADERS = [header.strip() for header in values[0] if header]  # Remove empty headers and strip whitespace
-        print(f"Updated HEADERS: {HEADERS}")
     except HttpError as e:
         print(f"Failed to update headers: {e}")
 
@@ -206,53 +206,45 @@ def get_column_letter(col_index: int) -> str:
 
 # === CRUD Routes for Asset ===
 
-# In-memory cache ด้วย TTL 5 นาที
-cache = TTLCache(maxsize=1, ttl=300)  # Cache สูงสุด 1 item, หมดอายุใน 300 วินาที
+# In-memory cache 
+cache = TTLCache(maxsize=1, ttl=21600)  # Cache สูงสุด 1 item, หมดอายุใน 6 ชั่วโมง
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets():
     """
-        Retrieve all non-deleted assets from Google Sheets as a tree structure.
+    Retrieve all non-deleted assets from Google Sheets as a tree structure.
 
-        **Input:**
-            None (HTTP GET request)
-            
-        **Process:**
-            1. Check in-memory cache for existing data
-            2. Connect to Google Sheets service
-            3. Fetch all rows from specified range
-            4. Parse values: JSON objects to string, "1"/"0" to int, others to string
-            5. Filter out deleted assets (isDelete = 1) and children of deleted parents
-            6. Build tree structure with subrow for children
-            7. Cache the result
-            8. Return tree structure
-            
-        **Output:**
-            - List[Dict]: List of asset dictionaries with subrow for children
-            - HTTPException: 404 if no assets found
-            - HTTPException: 500 if Google Sheets error occurs
+    Process:
+        1. Check cache
+        2. Fetch data from Google Sheets
+        3. Parse values
+        4. Filter out deleted nodes and children of deleted parents
+        5. Build children_map (parentId -> list of children)
+        6. Recursively build tree from children_map
+        7. Cache and return tree
     """
-    # ตรวจสอบ cache
-    if "assets" in cache:
-        return cache["assets"]
 
+    if "assets" in cache:
+        print("Cache hit")
+        return cache["assets"]
+    print("Reading from Google Sheets")
     try:
         sheets = get_google_sheets_service()
         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=ASSET_SHEET_RANGE).execute()
         values = result.get("values", [])
         if not values:
             raise HTTPException(status_code=404, detail="No assets found")
-        
-        headers = values[0]  # First row as headers
-        
+
+        headers = values[0]
+
         def parse_value(value):
             if value == "1":
                 return 1
-            elif value == "0":
+            if value == "0":
                 return 0
-            elif value is None:
+            if value is None:
                 return ""
-            elif isinstance(value, str):
+            if isinstance(value, str):
                 try:
                     parsed = json.loads(value)
                     if isinstance(parsed, dict):
@@ -262,48 +254,42 @@ async def read_assets():
                     return value
             return str(value)
 
-        # แปลงข้อมูลเป็น dictionary
         data = [
             {headers[i]: parse_value(cell) for i, cell in enumerate(row) if i < len(headers)}
             for row in values[1:]
         ]
-        
-        # สร้าง nodes_map และ children_map
+
+        # สร้าง map id->node เพื่อเช็ค parent later
         nodes_map = {node["id"]: node for node in data}
-        
-        children_map = {}
+
+        # กำหนดค่า default และแก้ไข parentId ถ้า parent ถูกลบ
         for node in data:
-            if "isDelete" not in node:
-                node["isDelete"] = 1  # Default to deleted if missing
-            if "parentId" not in node:
-                node["parentId"] = ""
-            
-            # เก็บเฉพาะ node ที่ไม่ถูกลบ และ parent (ถ้ามี) ไม่ถูกลบ
-            parent = nodes_map.get(node["parentId"], {}) if node["parentId"] else {}
-            if node["isDelete"] == 0 and (not node["parentId"] or parent.get("isDelete", 1) == 0):
-                parent_id = node["parentId"] or None
-                if parent_id:
-                    children_map.setdefault(parent_id, []).append(node)
-        
-        # สร้าง tree structure
-        def build_tree(parent_id=None):
+            node.setdefault("isDelete", 1)
+            node.setdefault("parentId", "")
+            if node["parentId"]:
+                parent = nodes_map.get(node["parentId"], {})
+                if parent.get("isDelete", 1) == 1:
+                    node["parentId"] = ""
+
+        # สร้าง children_map: parentId -> list of child nodes
+        children_map = defaultdict(list)
+        for node in data:
+            if node["isDelete"] == 0:
+                children_map[node["parentId"]].append(node)
+
+        # ฟังก์ชันสร้าง tree จาก children_map
+        def build_tree(parent_id=""):
             tree = []
-            for node in nodes_map.values():
-                # จัดการ parentId เป็น '' หรือ None
-                node_parent_id = node.get("parentId", "")
-                is_root = not node_parent_id or node_parent_id not in nodes_map or nodes_map[node_parent_id].get("isDelete", 1) == 1
-                # รวม node ที่ไม่ถูกลบ และเป็น root หรือมี parentId ตรง
-                if node.get("isDelete", 1) == 0 and (parent_id is None and is_root or node_parent_id == parent_id):
-                    node_copy = node.copy()
-                    node_copy["subrow"] = build_tree(node["id"])
-                    tree.append(node_copy)
+            for node in children_map.get(parent_id, []):
+                node_copy = node.copy()
+                node_copy["subRows"] = build_tree(node["id"])
+                tree.append(node_copy)
             return tree
-        
-        # สร้าง tree และ cache
+
         tree = build_tree()
         cache["assets"] = tree
         return tree
-    
+
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
@@ -343,6 +329,7 @@ async def create_asset(asset: Dict[str, Any]):
             valueInputOption="RAW",
             body={"values": [row_to_add]}
         ).execute()
+        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
         return asset
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
@@ -407,7 +394,7 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
                 spreadsheetId=SPREADSHEET_ID, 
                 body={"data": updates, "valueInputOption": "RAW"}
             ).execute()
-        
+        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
         return {"message": "Asset updated successfully"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
@@ -461,7 +448,22 @@ async def delete_asset(asset_id: str):
             valueInputOption="RAW",
             body={"values": [[1]]}
         ).execute()
+        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
         return {"message": "Asset marked as deleted"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
+@router.post("/clear-cache")
+async def clear_cache():
+    """
+    Clear the in-memory cache.
+
+    **Process:**
+        1. Clear the TTLCache
+        2. Return success message
+
+    **Output:**
+        - Dict: Success message
+    """
+    cache.clear()
+    return {"message": "Cache cleared successfully"}

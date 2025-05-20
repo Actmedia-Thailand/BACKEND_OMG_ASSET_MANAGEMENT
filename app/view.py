@@ -76,7 +76,6 @@ async def update_headers_from_sheet():
         
         # Update HEADERS with values from first row
         HEADERS = [header.strip() for header in values[0] if header]  # Remove empty headers and strip whitespace
-        print(f"Updated HEADERS: {HEADERS}")
     except HttpError as e:
         print(f"Failed to update headers: {e}")
 
