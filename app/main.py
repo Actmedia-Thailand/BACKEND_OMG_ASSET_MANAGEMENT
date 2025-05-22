@@ -63,7 +63,7 @@ app = FastAPI()
 
 # Add CORS Middleware
 origins = [
-    "*",  # อนุญาตทุก IP
+    "http://localhost:3000","https://omg-digital-asset-management.vercel.app/"
 ]
 app.add_middleware(
     CORSMiddleware,

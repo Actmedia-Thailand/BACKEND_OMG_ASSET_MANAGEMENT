@@ -41,7 +41,7 @@
         * requests: HTTP client for OAuth2
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, Response  
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse
 from google.oauth2.service_account import Credentials
@@ -56,12 +56,16 @@ import requests
 import bcrypt
 import jwt
 from app.sheets_service import get_google_sheets_service
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Loads variables from .env into environment
 
 # === Configuration ===
-SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 USER_SHEET_RANGE = 'User'
 
-SECRET_KEY = "omgthailand"  #! ควรเก็บใน ENV
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 30
 
@@ -473,7 +477,7 @@ async def register_user(user: Dict[str, Any]):
 
 # 7. POST Login and Generate Token
 @router.post("/login")
-async def login(user: Dict[str, Any]):
+async def login(user: Dict[str, Any], response: Response):
     """
         Authenticate user and generate token.
 
@@ -515,6 +519,17 @@ async def login(user: Dict[str, Any]):
                 # สร้าง JWT token
                 token = create_access_token(data={"sub": user_data["id"]})
                 
+                                # ✅ Set token in HTTP-only cookie
+                response.set_cookie(
+                    key="access_token",
+                    value=token,
+                    httponly=True,
+                    max_age= 60 * 60 * 24,  # 1 day
+                    secure=True, 
+                    samesite="None",  
+                   
+                )
+
                 # กำหนด response fields
                 response_user = {
                     "id": user_data.get("id"),
@@ -524,11 +539,10 @@ async def login(user: Dict[str, Any]):
                     "position": user_data.get("position"),
                     "level": user_data.get("level")
                 }
-                
+
                 return {
-                    "access_token": token,
                     "user": response_user,
-                    "token_type": "bearer"
+                    "token_type": "httpOnlyCookie"
                 }
         
         raise HTTPException(status_code=404, detail="User not found")
@@ -749,3 +763,9 @@ async def protected_route(token: str = Depends(oauth2_scheme)):
     """
     username = verify_token(token)
     return {"message": f"Hello, {username}"}
+
+@router.post("/logout")
+async def logout(response: Response):
+    # To delete a cookie, set it with an expired max_age
+    response.delete_cookie(key="access_token", value="", max_age=0, path="/")
+    return {"message": "Logged out successfully, token cookie deleted"}
