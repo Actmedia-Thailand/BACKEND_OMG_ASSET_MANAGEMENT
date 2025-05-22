@@ -527,7 +527,7 @@ async def login(user: Dict[str, Any], response: Response):
                     max_age= 60 * 60 * 24,  # 1 day
                     secure=True, 
                     samesite="None",  
-                   domain="https://omg-digital-asset-management.vercel.app/"
+                   
                 )
 
                 # กำหนด response fields
