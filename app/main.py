@@ -35,7 +35,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from app.user import router as user_router
-from app.asset import router as asset_router
+# from app.asset import router as asset_router
 from app.asset2 import router as asset2_router
 from app.asset3 import router as asset3_router
 from app.view import router as view_router
@@ -97,6 +97,6 @@ async def log_requests(request: Request, call_next):
 # - tags=["Asset3"]: used only for organizing routes in the Swagger UI (/docs), not required for functionality
 app.include_router(user_router, prefix="/users", tags=["Users"])
 app.include_router(view_router, prefix="/view", tags=["View"])
-app.include_router(asset_router, prefix="/asset", tags=["Asset"])
+# app.include_router(asset_router, prefix="/asset", tags=["Asset"])
 app.include_router(asset2_router, prefix="/asset2", tags=["Asset2"])
 app.include_router(asset3_router, prefix="/asset3", tags=["Asset3"])

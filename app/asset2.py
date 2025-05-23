@@ -110,97 +110,97 @@ router = APIRouter()
 #     asyncio.create_task(periodic_header_update())
 
 # หรือเพิ่ม endpoint
-@router.post("/update-headers")
-async def manual_update_headers():
-    await update_headers_from_sheet()
-    return {"message": "Headers updated"}
+# @router.post("/update-headers")
+# async def manual_update_headers():
+#     await update_headers_from_sheet()
+#     return {"message": "Headers updated"}
 
-def convert_value(value: str):
-    """
-        Convert string values to appropriate Python types.
+# def convert_value(value: str):
+#     """
+#         Convert string values to appropriate Python types.
 
-        **Input:**
+#         **Input:**
 
-            - value (str): String value to convert
+#             - value (str): String value to convert
             
-        **Process:**
+#         **Process:**
 
-            1. Try converting to integer if string contains only digits
-            2. Try converting to float if possible
-            3. Try converting to boolean if string is "true" or "false"
-            4. Return stripped string if no conversion possible
+#             1. Try converting to integer if string contains only digits
+#             2. Try converting to float if possible
+#             3. Try converting to boolean if string is "true" or "false"
+#             4. Return stripped string if no conversion possible
             
-        **Output:**
+#         **Output:**
 
-            - int/float/bool/str: Converted value based on input type
-    """
-    try:
-        if value.isdigit():
-            return int(value)
-        return float(value)
-    except ValueError:
-        if value.lower() in ["true", "false"]:
-            return value.lower() == "true"
-        try:
-            return datetime.fromisoformat(value)
-        except ValueError:
-            try:
-                days_since_epoch = float(value)
-                return datetime(1899, 12, 30) + timedelta(days=days_since_epoch)
-            except ValueError:
-                return value
+#             - int/float/bool/str: Converted value based on input type
+#     """
+#     try:
+#         if value.isdigit():
+#             return int(value)
+#         return float(value)
+#     except ValueError:
+#         if value.lower() in ["true", "false"]:
+#             return value.lower() == "true"
+#         try:
+#             return datetime.fromisoformat(value)
+#         except ValueError:
+#             try:
+#                 days_since_epoch = float(value)
+#                 return datetime(1899, 12, 30) + timedelta(days=days_since_epoch)
+#             except ValueError:
+#                 return value
 
 
-def binary_search_by_index(values: list, target: str) -> int:
-    """
-        Perform binary search on Google Sheets values to find target asset.
+# def binary_search_by_index(values: list, target: str) -> int:
+#     """
+#         Perform binary search on Google Sheets values to find target asset.
 
-        **Input:**
+#         **Input:**
 
-            - values (list): List of rows from Google Sheets
-            - target (str): Asset ID to search for
+#             - values (list): List of rows from Google Sheets
+#             - target (str): Asset ID to search for
             
-        **Process:**
+#         **Process:**
 
-            1. Sort values based on first column (excluding header)
-            2. Perform binary search on sorted values
-            3. Convert found index back to original row number
+#             1. Sort values based on first column (excluding header)
+#             2. Perform binary search on sorted values
+#             3. Convert found index back to original row number
             
-        **Output:**
+#         **Output:**
 
-            - int: Row number (1-based) if found, -1 if not found
-    """
-    if not values or len(values) < 2:
-        return -1  # Handle cases with no data or just a header
+#             - int: Row number (1-based) if found, -1 if not found
+#     """
+#     if not values or len(values) < 2:
+#         return -1  # Handle cases with no data or just a header
 
-    # Extract and sort rows (excluding the header) based on the UUID in the first column
-    sorted_values = sorted(values[1:], key=lambda row: row[0].strip().lower())
+#     # Extract and sort rows (excluding the header) based on the UUID in the first column
+#     sorted_values = sorted(values[1:], key=lambda row: row[0].strip().lower())
 
-    normalized_view_id = target.strip().lower()
-    low, high = 0, len(sorted_values) - 1
+#     normalized_view_id = target.strip().lower()
+#     low, high = 0, len(sorted_values) - 1
 
-    while low <= high:
-        mid = (low + high) // 2
-        mid_value = sorted_values[mid][0].strip().lower()
+#     while low <= high:
+#         mid = (low + high) // 2
+#         mid_value = sorted_values[mid][0].strip().lower()
 
-        if mid_value == normalized_view_id:
-            # Find the original index in the unsorted list
-            original_index = values.index(sorted_values[mid])
-            return original_index + 1  # +1 to make it 1-based
-        elif mid_value < normalized_view_id:
-            low = mid + 1
-        else:
-            high = mid - 1
+#         if mid_value == normalized_view_id:
+#             # Find the original index in the unsorted list
+#             original_index = values.index(sorted_values[mid])
+#             return original_index + 1  # +1 to make it 1-based
+#         elif mid_value < normalized_view_id:
+#             low = mid + 1
+#         else:
+#             high = mid - 1
 
-    return -1  # Not found
+#     return -1  # Not found
 
-def get_column_letter(col_index: int) -> str:
-    """Convert column index to Google Sheets column letter (A, B, ..., Z, AA, AB, ...)"""
-    col_letter = ""
-    while col_index > 0:
-        col_index, remainder = divmod(col_index - 1, 26)
-        col_letter = chr(65 + remainder) + col_letter
-    return col_letter
+# def get_column_letter(col_index: int) -> str:
+#     """Convert column index to Google Sheets column letter (A, B, ..., Z, AA, AB, ...)"""
+#     col_letter = ""
+#     while col_index > 0:
+#         col_index, remainder = divmod(col_index - 1, 26)
+#         col_letter = chr(65 + remainder) + col_letter
+#     return col_letter
 
 
 # === CRUD Routes for Asset ===
@@ -269,158 +269,158 @@ async def read_assets():
 
 
 
-@router.post("/")
-async def create_asset(asset: Dict[str, Any]):
-    """
-        Create new asset in Google Sheets.
+# @router.post("/")
+# async def create_asset(asset: Dict[str, Any]):
+#     """
+#         Create new asset in Google Sheets.
 
-        **Input:**
+#         **Input:**
 
-            - asset (Dict[str, Any]): Asset data in dictionary format
+#             - asset (Dict[str, Any]): Asset data in dictionary format
             
-        **Process:**
+#         **Process:**
 
-            1. Generate UUID for new asset
-            2. Add creation timestamp
-            3. Set isDelete flag to 0
-            4. Convert asset dict to row format
-            5. Append row to Google Sheets
+#             1. Generate UUID for new asset
+#             2. Add creation timestamp
+#             3. Set isDelete flag to 0
+#             4. Convert asset dict to row format
+#             5. Append row to Google Sheets
             
-        **Output:**
+#         **Output:**
 
-            - Dict: Success message with new asset ID
-            - HTTPException: 500 if Google Sheets error occurs
-    """
-    asset["isDelete"] = 0  # Default to not deleted
-    asset["id"] = str(uuid4())
-    try:
-        sheets = get_google_sheets_service()
-        row_to_add = [asset.get(header, "") for header in HEADERS]
-        sheets.values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range=ASSET_SHEET_RANGE,
-            valueInputOption="RAW",
-            body={"values": [row_to_add]}
-        ).execute()
-        return asset
-    except HttpError as e:
-        raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+#             - Dict: Success message with new asset ID
+#             - HTTPException: 500 if Google Sheets error occurs
+#     """
+#     asset["isDelete"] = 0  # Default to not deleted
+#     asset["id"] = str(uuid4())
+#     try:
+#         sheets = get_google_sheets_service()
+#         row_to_add = [asset.get(header, "") for header in HEADERS]
+#         sheets.values().append(
+#             spreadsheetId=SPREADSHEET_ID,
+#             range=ASSET_SHEET_RANGE,
+#             valueInputOption="RAW",
+#             body={"values": [row_to_add]}
+#         ).execute()
+#         return asset
+#     except HttpError as e:
+#         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
-@router.put("/{asset_id}")
-async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
-    """
-        Update existing asset by ID.
+# @router.put("/{asset_id}")
+# async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
+#     """
+#         Update existing asset by ID.
 
-        **Input:**
+#         **Input:**
 
-            - asset_id (str): UUID of asset to update
-            - updated_data (Dict[str, Any]): New asset data
+#             - asset_id (str): UUID of asset to update
+#             - updated_data (Dict[str, Any]): New asset data
             
-        **Process:**
+#         **Process:**
 
-            1. Find asset row using binary search
-            2. Create update operations for changed fields
-            3. Execute batch update in Google Sheets
+#             1. Find asset row using binary search
+#             2. Create update operations for changed fields
+#             3. Execute batch update in Google Sheets
             
-        **Output:**
+#         **Output:**
 
-            - Dict: Success message
-            - HTTPException: 404 if asset not found
-            - HTTPException: 500 if Google Sheets error occurs
-    """
-    try:
-        # Initialize Google Sheets service
-        sheets = get_google_sheets_service()
+#             - Dict: Success message
+#             - HTTPException: 404 if asset not found
+#             - HTTPException: 500 if Google Sheets error occurs
+#     """
+#     try:
+#         # Initialize Google Sheets service
+#         sheets = get_google_sheets_service()
 
-        # Determine the column index for "id"
-        if "id" not in HEADERS:
-            raise HTTPException(status_code=500, detail="ID column not defined in headers")
-        id_column_index = HEADERS.index("id") + 1  # 1-based index for Google Sheets
-        id_column_letter = get_column_letter(id_column_index)  # Convert index to column letter
+#         # Determine the column index for "id"
+#         if "id" not in HEADERS:
+#             raise HTTPException(status_code=500, detail="ID column not defined in headers")
+#         id_column_index = HEADERS.index("id") + 1  # 1-based index for Google Sheets
+#         id_column_letter = get_column_letter(id_column_index)  # Convert index to column letter
 
-        # Fetch the "id" column dynamically
-        result = sheets.values().get(
-            spreadsheetId=SPREADSHEET_ID, 
-            range=f"{ASSET_SHEET_RANGE}!{id_column_letter}:{id_column_letter}"
-        ).execute()
-        values = result.get("values", [])
-        if not values:
-            raise HTTPException(status_code=404, detail="No assets found")
-        row_number = binary_search_by_index(values, asset_id)
-        if row_number == -1:
-            raise HTTPException(status_code=404, detail="Asset not found")
+#         # Fetch the "id" column dynamically
+#         result = sheets.values().get(
+#             spreadsheetId=SPREADSHEET_ID, 
+#             range=f"{ASSET_SHEET_RANGE}!{id_column_letter}:{id_column_letter}"
+#         ).execute()
+#         values = result.get("values", [])
+#         if not values:
+#             raise HTTPException(status_code=404, detail="No assets found")
+#         row_number = binary_search_by_index(values, asset_id)
+#         if row_number == -1:
+#             raise HTTPException(status_code=404, detail="Asset not found")
         
-        updates = []
-        for header, value in updated_data.items():
-            if header in HEADERS:
-                col_index = HEADERS.index(header) + 1
-                col_letter = get_column_letter(col_index)
-                cell_value = value if isinstance(value, (int, float)) else str(value)
-                updates.append({
-                    "range": f"{ASSET_SHEET_RANGE}!{col_letter}{row_number}",
-                    "values": [[cell_value]]
-                })
+#         updates = []
+#         for header, value in updated_data.items():
+#             if header in HEADERS:
+#                 col_index = HEADERS.index(header) + 1
+#                 col_letter = get_column_letter(col_index)
+#                 cell_value = value if isinstance(value, (int, float)) else str(value)
+#                 updates.append({
+#                     "range": f"{ASSET_SHEET_RANGE}!{col_letter}{row_number}",
+#                     "values": [[cell_value]]
+#                 })
         
-        if updates:
-            sheets.values().batchUpdate(
-                spreadsheetId=SPREADSHEET_ID, 
-                body={"data": updates, "valueInputOption": "RAW"}
-            ).execute()
+#         if updates:
+#             sheets.values().batchUpdate(
+#                 spreadsheetId=SPREADSHEET_ID, 
+#                 body={"data": updates, "valueInputOption": "RAW"}
+#             ).execute()
         
-        return {"message": "Asset updated successfully"}
-    except HttpError as e:
-        raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+#         return {"message": "Asset updated successfully"}
+#     except HttpError as e:
+#         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
-@router.delete("/{asset_id}")
-async def delete_asset(asset_id: str):
-    """
-        Soft delete asset by setting isDelete flag.
+# @router.delete("/{asset_id}")
+# async def delete_asset(asset_id: str):
+#     """
+#         Soft delete asset by setting isDelete flag.
 
-        **Input:**
+#         **Input:**
 
-            - asset_id (str): UUID of asset to delete
+#             - asset_id (str): UUID of asset to delete
             
-        **Process:**
+#         **Process:**
 
-            1. Find asset row using binary search
-            2. Update isDelete column to 1
+#             1. Find asset row using binary search
+#             2. Update isDelete column to 1
             
-        **Output:**
+#         **Output:**
 
-            - Dict: Success message
-            - HTTPException: 404 if asset not found
-            - HTTPException: 500 if Google Sheets error occurs
-    """
-    try:
-        # Initialize Google Sheets service
-        sheets = get_google_sheets_service()
+#             - Dict: Success message
+#             - HTTPException: 404 if asset not found
+#             - HTTPException: 500 if Google Sheets error occurs
+#     """
+#     try:
+#         # Initialize Google Sheets service
+#         sheets = get_google_sheets_service()
 
-        # Determine the column index for "id"
-        if "id" not in HEADERS:
-            raise HTTPException(status_code=500, detail="ID column not defined in headers")
-        id_column_index = HEADERS.index("id") + 1  # 1-based index for Google Sheets
-        id_column_letter = get_column_letter(id_column_index)
-  # Convert index to column letter
+#         # Determine the column index for "id"
+#         if "id" not in HEADERS:
+#             raise HTTPException(status_code=500, detail="ID column not defined in headers")
+#         id_column_index = HEADERS.index("id") + 1  # 1-based index for Google Sheets
+#         id_column_letter = get_column_letter(id_column_index)
+#   # Convert index to column letter
 
-        # Fetch the "id" column dynamically
-        result = sheets.values().get(
-            spreadsheetId=SPREADSHEET_ID, 
-            range=f"{ASSET_SHEET_RANGE}!{id_column_letter}:{id_column_letter}"
-        ).execute()
-        values = result.get("values", [])
-        if not values:
-            raise HTTPException(status_code=404, detail="No assets found")
-        row_number = binary_search_by_index(values, asset_id)
-        if row_number == -1:
-            raise HTTPException(status_code=404, detail="Asset not found")
-        col_index = HEADERS.index("isDelete") + 1
-        sheets.values().update(
-            spreadsheetId=SPREADSHEET_ID,
-            range=f"{ASSET_SHEET_RANGE}!{get_column_letter(col_index)}{row_number}",
-            valueInputOption="RAW",
-            body={"values": [[1]]}
-        ).execute()
-        return {"message": "Asset marked as deleted"}
-    except HttpError as e:
-        raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+#         # Fetch the "id" column dynamically
+#         result = sheets.values().get(
+#             spreadsheetId=SPREADSHEET_ID, 
+#             range=f"{ASSET_SHEET_RANGE}!{id_column_letter}:{id_column_letter}"
+#         ).execute()
+#         values = result.get("values", [])
+#         if not values:
+#             raise HTTPException(status_code=404, detail="No assets found")
+#         row_number = binary_search_by_index(values, asset_id)
+#         if row_number == -1:
+#             raise HTTPException(status_code=404, detail="Asset not found")
+#         col_index = HEADERS.index("isDelete") + 1
+#         sheets.values().update(
+#             spreadsheetId=SPREADSHEET_ID,
+#             range=f"{ASSET_SHEET_RANGE}!{get_column_letter(col_index)}{row_number}",
+#             valueInputOption="RAW",
+#             body={"values": [[1]]}
+#         ).execute()
+#         return {"message": "Asset marked as deleted"}
+#     except HttpError as e:
+#         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 

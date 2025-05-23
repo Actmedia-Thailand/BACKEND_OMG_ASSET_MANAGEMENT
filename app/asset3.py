@@ -33,7 +33,7 @@
         * google-auth: Google authentication
         * google-api-python-client: Google Sheets API client
 """
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -45,9 +45,14 @@ import asyncio
 from app.sheets_service import get_google_sheets_service
 from cachetools import TTLCache
 from collections import defaultdict
+from .user import require_level
+import os
+from dotenv import load_dotenv
+
+load_dotenv()  # Loads variables from .env into environment
 
 # === Configuration ===
-SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
 HEADERS = ["id", "QR Code", "MACADDRESS", "assetTypeId", "Asset Name", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "displayArrangement", "displayPosition", "ConnectVia", "wifiSsid", "ProjectName", "screen Position Side", "setMacAddress", "Phone", "DongleWifi", "Asset name","parentId","isDelete"]
@@ -210,7 +215,7 @@ def get_column_letter(col_index: int) -> str:
 cache = TTLCache(maxsize=1, ttl=21600)  # Cache สูงสุด 1 item, หมดอายุใน 6 ชั่วโมง
 
 @router.get("/", response_model=List[Dict[str, Any]])
-async def read_assets():
+async def read_assets(_: None = Depends(require_level(1))):
     """
     Retrieve all non-deleted assets from Google Sheets as a tree structure.
 
@@ -297,7 +302,7 @@ async def read_assets():
 
 
 @router.post("/")
-async def create_asset(asset: Dict[str, Any]):
+async def create_asset(asset: Dict[str, Any],_: None = Depends(require_level(2))):
     """
         Create new asset in Google Sheets.
 
@@ -335,7 +340,7 @@ async def create_asset(asset: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.put("/{asset_id}")
-async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
+async def update_asset(asset_id: str, updated_data: Dict[str, Any],_: None = Depends(require_level(2))):
     """
         Update existing asset by ID.
 
@@ -400,7 +405,7 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.delete("/{asset_id}")
-async def delete_asset(asset_id: str):
+async def delete_asset(asset_id: str,_: None = Depends(require_level(2))):
     """
         Soft delete asset by setting isDelete flag.
 
@@ -454,7 +459,7 @@ async def delete_asset(asset_id: str):
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.post("/clear-cache")
-async def clear_cache():
+async def clear_cache(_: None = Depends(require_level(3))):
     """
     Clear the in-memory cache.
 

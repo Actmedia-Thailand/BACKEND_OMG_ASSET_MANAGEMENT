@@ -33,7 +33,7 @@
         * google-api-python-client: Google Sheets API client
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -43,8 +43,15 @@ from uuid import uuid4
 import json
 import asyncio
 from app.sheets_service import get_google_sheets_service
+from .user import require_level
+import os
+from dotenv import load_dotenv
 
-SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! Should be stored in ENV
+
+load_dotenv()  # Loads variables from .env into environment
+
+# === Configuration ===
+SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 VIEW_SHEET_RANGE = 'View'  #! Specify the range for the View sheet
 HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group", "isDelete", "createdOn"]
 
@@ -213,7 +220,7 @@ def parse_value(value):
         return value
 
 @router.get("/", response_model=List[Dict[str, Any]])
-async def read_views():
+async def read_views(_: None = Depends(require_level(1))):
     """
         Retrieve all non-deleted views from Google Sheets.
 
@@ -253,7 +260,7 @@ async def read_views():
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.post("/")
-async def create_view(view: Dict[str, Any]):
+async def create_view(view: Dict[str, Any],_: None = Depends(require_level(1))):
     """
         Create new view in Google Sheets.
 
@@ -297,7 +304,7 @@ async def create_view(view: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.put("/{view_id}")
-async def update_view(view_id: str, updated_data: Dict[str, Any]):
+async def update_view(view_id: str, updated_data: Dict[str, Any],_: None = Depends(require_level(1))):
     """
         Update existing view by ID.
 
@@ -350,7 +357,7 @@ async def update_view(view_id: str, updated_data: Dict[str, Any]):
         raise HTTPException(status_code=500, detail=f"Failed to update Google Sheets: {e}")
 
 @router.delete("/{view_id}")
-async def delete_view(view_id: str):
+async def delete_view(view_id: str,_: None = Depends(require_level(1))):
     """
         Soft delete view by setting isDelete flag.
 

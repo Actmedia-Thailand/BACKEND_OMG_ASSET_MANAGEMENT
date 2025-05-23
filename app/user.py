@@ -41,11 +41,11 @@
         * requests: HTTP client for OAuth2
 """
 
-from fastapi import APIRouter, HTTPException, Depends, Query, Response  
+from fastapi import APIRouter, HTTPException, Depends, Query, Response, Request as FastAPIRequest  
 from fastapi.security import OAuth2PasswordBearer
 from fastapi.responses import RedirectResponse
 from google.oauth2.service_account import Credentials
-from google.auth.transport.requests import Request
+from google.auth.transport.requests import Request as GoogleRequest
 from google.oauth2.id_token import verify_oauth2_token
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -67,7 +67,7 @@ USER_SHEET_RANGE = 'User'
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 30
+ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -212,40 +212,115 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
     to_encode = data.copy()
     expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
+
     return jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
 
-def verify_token(token: str):
-    """
-        Verify JWT token validity.
-
-        **Input:**
-
-            - token (str): JWT token to verify
-            
-        **Process:**
-
-            1. Decode token using secret key
-            2. Verify signature and expiration
-            3. Extract user ID from payload
-            
-        **Output:**
-
-            - str: User ID from token
-            - HTTPException: 401 if token is invalid or expired
-    """
-    try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        return payload.get("sub")
-    except jwt.ExpiredSignatureError:
-        raise HTTPException(status_code=401, detail="Token expired")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
+# Update the require_level function to use FastAPIRequest
+def require_level(min_level: int):
+    def dependency(request: FastAPIRequest):
+        token = request.cookies.get("access_token")
+        print(f"Token from cookie: {token}")
+        if not token:
+            raise HTTPException(status_code=403, detail="Authentication required")
+        try:
+            payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+            print(f"Decoded payload: {payload}")
+            user_data = payload.get("user_data")  # เปลี่ยนจาก sub เป็น user_data
+            if not user_data or "level" not in user_data:
+                raise HTTPException(status_code=403, detail="Invalid token data")
+            user_level = int(user_data["level"])
+            print(f"User level: {user_level}, Required level: {min_level}")
+            if user_level < min_level:
+                raise HTTPException(status_code=403, detail="Insufficient permission level")
+        except jwt.ExpiredSignatureError as e:
+            print(f"Token expired error: {e}")
+            raise HTTPException(status_code=401, detail="Token expired")
+        except jwt.InvalidTokenError as e:
+            print(f"Invalid token error: {e}")
+            raise HTTPException(status_code=401, detail="Invalid token")
+    return dependency
 
 # === Routes ===
 
+# 7. POST Login and Generate Token
+@router.post("/login")
+async def login(user: Dict[str, Any], response: Response):
+    """
+        Authenticate user and generate token.
+
+        **Input:**
+
+            - user (Dict[str, Any]): Login credentials
+            
+        **Process:**
+
+            1. Validate credentials
+            2. Verify password
+            3. Generate access token
+            4. Prepare user response data
+            
+        **Output:**
+
+            - Dict: Token and user data
+            - HTTPException: 401 if authentication fails
+            - HTTPException: 500 if Google Sheets error
+    """
+    print(f"User data: {user}")
+    if not user.get("username") or not user.get("password"):
+        raise HTTPException(status_code=400, detail="Username and password are required")
+    
+    try:
+        sheets = get_google_sheets_service()
+        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
+        values = result.get('values', [])
+        if not values:
+            raise HTTPException(status_code=404, detail="No data found")
+        
+        headers = values[0]  # ใช้ row แรกเป็น headers
+        for row in values[1:]:  # เริ่มจาก row ที่ 2
+            user_data = dict(zip(headers, [convert_value(value) for value in row]))
+            if user_data.get("username") == user["username"]:
+                # ตรวจสอบ password
+                if not verify_password(user["password"], user_data.get("password")):
+                    raise HTTPException(status_code=401, detail="Invalid password")
+                
+                                # กำหนด response fields
+                response_user = {
+                    "id": user_data.get("id"),
+                    "username": user_data.get("username"),
+                    "name": user_data.get("name"),
+                    "department": user_data.get("department"),
+                    "position": user_data.get("position"),
+                    "level": user_data.get("level")
+                }
+
+                # สร้าง JWT token
+                token = create_access_token(data={"sub": user_data.get("id"), "user_data": response_user})
+                
+                                # ✅ Set token in HTTP-only cookie
+                response.set_cookie(
+                    key="access_token",
+                    value=token,
+                    httponly=True,
+                    max_age= 60 * 60 * 24,  # 1 day
+                    secure=True, 
+                    samesite="None",  # Adjust as needed
+                   
+                )
+
+
+                return {
+                    "user": response_user,
+                    "token_type": "httpOnlyCookie"
+                }
+        
+        raise HTTPException(status_code=404, detail="User not found")
+    except HttpError:
+        raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
+
 ## Get All Users
 @router.get("/", response_model=List[Dict[str, Any]])
-async def read_users():
+async def read_users(_: None = Depends(require_level(3))):
     """
         Retrieve all users from Google Sheets.
 
@@ -325,7 +400,7 @@ async def create_user(user: Dict[str, Any]):
 
 # 4. PUT Update User By ID
 @router.put("/{user_id}")
-async def update_user(user_id: str, updated_data: Dict[str, Any]):
+async def update_user(user_id: str, updated_data: Dict[str, Any],_: None = Depends(require_level(1))):
     """
         Update existing user by ID.
 
@@ -370,7 +445,7 @@ async def update_user(user_id: str, updated_data: Dict[str, Any]):
 
 # 5. DELETE User By ID
 @router.delete("/{user_id}")
-async def delete_user(user_id: str):
+async def delete_user(user_id: str,_: None = Depends(require_level(1))):
     """
         Delete user by ID from Google Sheets.
 
@@ -475,172 +550,100 @@ async def register_user(user: Dict[str, Any]):
     except HttpError:
         raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
 
-# 7. POST Login and Generate Token
-@router.post("/login")
-async def login(user: Dict[str, Any], response: Response):
-    """
-        Authenticate user and generate token.
 
-        **Input:**
 
-            - user (Dict[str, Any]): Login credentials
+# @router.get("/google_signup")
+# async def google_signup(code: str = Query(...)):
+#     """
+#         Handle Google OAuth2 signup/login flow.
+
+#         **Input:**
+
+#             - code (str): Authorization code from Google
             
-        **Process:**
+#         **Process:**
 
-            1. Validate credentials
-            2. Verify password
-            3. Generate access token
-            4. Prepare user response data
+#             1. Exchange code for access token
+#             2. Verify ID token
+#             3. Check if user exists
+#             4. Create new user if needed
+#             5. Generate access token
             
-        **Output:**
+#         **Output:**
 
-            - Dict: Token and user data
-            - HTTPException: 401 if authentication fails
-            - HTTPException: 500 if Google Sheets error
-    """
-    if not user.get("username") or not user.get("password"):
-        raise HTTPException(status_code=400, detail="Username and password are required")
-    
-    try:
-        sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
-        values = result.get('values', [])
-        if not values:
-            raise HTTPException(status_code=404, detail="No data found")
-        
-        headers = values[0]  # ใช้ row แรกเป็น headers
-        for row in values[1:]:  # เริ่มจาก row ที่ 2
-            user_data = dict(zip(headers, [convert_value(value) for value in row]))
-            if user_data.get("username") == user["username"]:
-                # ตรวจสอบ password
-                if not verify_password(user["password"], user_data.get("password")):
-                    raise HTTPException(status_code=401, detail="Invalid password")
-                
-                # สร้าง JWT token
-                token = create_access_token(data={"sub": user_data["id"]})
-                
-                                # ✅ Set token in HTTP-only cookie
-                response.set_cookie(
-                    key="access_token",
-                    value=token,
-                    httponly=True,
-                    max_age= 60 * 60 * 24,  # 1 day
-                    secure=True, 
-                    samesite="None",  
-                   
-                )
+#             - RedirectResponse: Redirect with token
+#             - HTTPException: Various error cases
+#     """
+#     try:
+#         # **ขั้นตอนที่ 1: รับ token access จาก Google ด้วย code**
+#         token_url = "https://oauth2.googleapis.com/token"
+#         client_id = "58925176098-4s7j4uqgh9h77e1n74af32kt1spfml89.apps.googleusercontent.com"   #! ควรเก็บใน ENV
+#         client_secret = "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"   #! ควรเก็บใน ENV
+#         redirect_uri = "http://localhost:8000/users/google_signup"  
 
-                # กำหนด response fields
-                response_user = {
-                    "id": user_data.get("id"),
-                    "username": user_data.get("username"),
-                    "name": user_data.get("name"),
-                    "department": user_data.get("department"),
-                    "position": user_data.get("position"),
-                    "level": user_data.get("level")
-                }
+#         data = {
+#             "code": code,
+#             "client_id": client_id,
+#             "client_secret": client_secret,
+#             "redirect_uri": redirect_uri,
+#             "grant_type": "authorization_code",
+#         }
 
-                return {
-                    "user": response_user,
-                    "token_type": "httpOnlyCookie"
-                }
-        
-        raise HTTPException(status_code=404, detail="User not found")
-    except HttpError:
-        raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
+#         token_response = requests.post(token_url, data=data)
+#         token_response.raise_for_status()
+#         tokens = token_response.json()
+#         id_token = tokens.get("id_token")
 
-@router.get("/google_signup")
-async def google_signup(code: str = Query(...)):
-    """
-        Handle Google OAuth2 signup/login flow.
+#         if not id_token:
+#             raise HTTPException(status_code=400, detail="ID Token missing in response")
 
-        **Input:**
+#         # **ขั้นตอนที่ 2: Decode ID Token เพื่อดึงข้อมูล email**
+#         id_info = verify_oauth2_token(id_token, GoogleRequest(), client_id)
+#         email = id_info.get("email")
+#         if not email:
+#             raise HTTPException(status_code=400, detail="Email not found in ID Token")
 
-            - code (str): Authorization code from Google
-            
-        **Process:**
+#         # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
+#         existsId = check_username_exists(email)
 
-            1. Exchange code for access token
-            2. Verify ID token
-            3. Check if user exists
-            4. Create new user if needed
-            5. Generate access token
-            
-        **Output:**
+#         if existsId:
+#             access_token = create_access_token(data={"sub": existsId})
+#             redirect_url = f"http://localhost:3000/monitortoken?token={access_token}&username={email}"  #! แก้ urlfrontend
+#             return RedirectResponse(url=redirect_url)
 
-            - RedirectResponse: Redirect with token
-            - HTTPException: Various error cases
-    """
-    try:
-        # **ขั้นตอนที่ 1: รับ token access จาก Google ด้วย code**
-        token_url = "https://oauth2.googleapis.com/token"
-        client_id = "58925176098-4s7j4uqgh9h77e1n74af32kt1spfml89.apps.googleusercontent.com"   #! ควรเก็บใน ENV
-        client_secret = "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"   #! ควรเก็บใน ENV
-        redirect_uri = "http://localhost:8000/users/google_signup"  
+#         # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
+#         user_data = {
+#             "id": str(uuid4()),
+#             "username": email,
+#             "level" : 1,
+#             "createdOn": datetime.now().isoformat(),
+#         }
 
-        data = {
-            "code": code,
-            "client_id": client_id,
-            "client_secret": client_secret,
-            "redirect_uri": redirect_uri,
-            "grant_type": "authorization_code",
-        }
+#         sheets = get_google_sheets_service()
+#         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
+#         headers = result.get('values', [])[0]
 
-        token_response = requests.post(token_url, data=data)
-        token_response.raise_for_status()
-        tokens = token_response.json()
-        id_token = tokens.get("id_token")
+#         row_to_add = [user_data.get(header, "") for header in headers]
+#         sheets.values().append(
+#             spreadsheetId=SPREADSHEET_ID,
+#             range=USER_SHEET_RANGE,
+#             valueInputOption="RAW",
+#             body={"values": [row_to_add]},
+#         ).execute()
 
-        if not id_token:
-            raise HTTPException(status_code=400, detail="ID Token missing in response")
+#         access_token = create_access_token(data={"sub": user_data["id"]})
 
-        # **ขั้นตอนที่ 2: Decode ID Token เพื่อดึงข้อมูล email**
-        id_info = verify_oauth2_token(id_token, Request(), client_id)
-        email = id_info.get("email")
-        if not email:
-            raise HTTPException(status_code=400, detail="Email not found in ID Token")
+#         redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
 
-        # **ขั้นตอนที่ 3: ตรวจสอบว่า email มีอยู่ใน Google Sheets หรือไม่**
-        existsId = check_username_exists(email)
-
-        if existsId:
-            access_token = create_access_token(data={"sub": existsId})
-            redirect_url = f"http://localhost:3000/monitortoken?token={access_token}&username={email}"  #! แก้ urlfrontend
-            return RedirectResponse(url=redirect_url)
-
-        # **ขั้นตอนที่ 4: เพิ่ม email ลงใน Google Sheets**
-        user_data = {
-            "id": str(uuid4()),
-            "username": email,
-            "level" : 1,
-            "createdOn": datetime.now().isoformat(),
-        }
-
-        sheets = get_google_sheets_service()
-        result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=USER_SHEET_RANGE).execute()
-        headers = result.get('values', [])[0]
-
-        row_to_add = [user_data.get(header, "") for header in headers]
-        sheets.values().append(
-            spreadsheetId=SPREADSHEET_ID,
-            range=USER_SHEET_RANGE,
-            valueInputOption="RAW",
-            body={"values": [row_to_add]},
-        ).execute()
-
-        access_token = create_access_token(data={"sub": user_data["id"]})
-
-        redirect_url = f"http://localhost:3000/assets?token={access_token}"#! แก้ urlfrontend
-
-        return RedirectResponse(url=redirect_url)
-    except requests.RequestException as e:
-        raise HTTPException(status_code=500, detail=f"Error communicating with Google: {e}")
-    except HttpError:
-        raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
+#         return RedirectResponse(url=redirect_url)
+#     except requests.RequestException as e:
+#         raise HTTPException(status_code=500, detail=f"Error communicating with Google: {e}")
+#     except HttpError:
+#         raise HTTPException(status_code=500, detail="Error writing to Google Sheets")
     
 
-@router.get("/{user_id}", response_model=Dict[str, Any])
-async def get_user_by_id(user_id: str):
+@router.get("/{user_id}", response_model=Dict[str, Any],)
+async def get_user_by_id(user_id: str,_: None = Depends(require_level(1))):
     """
         Retrieve user by ID from Google Sheets.
 
@@ -677,7 +680,7 @@ async def get_user_by_id(user_id: str):
         raise HTTPException(status_code=500, detail="Error reading from Google Sheets")
     
 @router.post("/reset_password")
-async def reset_password(request: Dict[str, Any]):
+async def reset_password(request: Dict[str, Any],_: None = Depends(require_level(1))):
     """
         Reset user password.
 
@@ -741,31 +744,8 @@ async def reset_password(request: Dict[str, Any]):
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Error updating password: {e}")
 
-# Protected Route Example
-@router.get("/protected")
-async def protected_route(token: str = Depends(oauth2_scheme)):
-    """
-        Protected route example requiring authentication.
-
-        **Input:**
-
-            - token (str): JWT token from request header
-            
-        **Process:**
-
-            1. Verify token validity
-            2. Extract username from token
-            
-        **Output:**
-
-            - Dict: Welcome message
-            - HTTPException: 401 if token invalid
-    """
-    username = verify_token(token)
-    return {"message": f"Hello, {username}"}
-
 @router.post("/logout")
-async def logout(response: Response):
+async def logout(response: Response,_: None = Depends(require_level(1))):
     # To delete a cookie, set it with an expired max_age
     response.delete_cookie(key="access_token", value="", max_age=0, path="/")
     return {"message": "Logged out successfully, token cookie deleted"}
