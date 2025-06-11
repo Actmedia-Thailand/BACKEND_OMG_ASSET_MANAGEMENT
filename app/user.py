@@ -67,7 +67,7 @@ USER_SHEET_RANGE = 'User'
 
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = 60 * 24
+ACCESS_TOKEN_EXPIRE_MINUTES = None  # Set to None for no expiration
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -302,10 +302,9 @@ async def login(user: Dict[str, Any], response: Response):
                     key="access_token",
                     value=token,
                     httponly=True,
-                    max_age= 60 * 60 * 24,  # 1 day
-                    secure=True, 
-                    samesite="None",  # Adjust as needed
-                   
+                    max_age=None,  # Set to None for no expiration
+                    secure=True,
+                    samesite="None",
                 )
 
 
