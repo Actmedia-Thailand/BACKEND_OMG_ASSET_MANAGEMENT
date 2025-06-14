@@ -43,6 +43,7 @@ from uuid import uuid4
 import json
 import asyncio
 from app.sheets_service import get_google_sheets_service
+from .cache_manager import asset2_cache
 
 # === Configuration ===
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
@@ -207,26 +208,11 @@ router = APIRouter()
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets():
-    """
-        Retrieve all non-deleted assets from Google Sheets.
-
-        **Input:**
-
-            None (HTTP GET request)
-            
-        **Process:**
-
-            1. Connect to Google Sheets service
-            2. Fetch all rows from specified range
-            3. Parse values: JSON objects to string, "1"/"0" to int, others to string
-            4. Filter out deleted assets (isDelete = 1)
-            
-        **Output:**
-
-            - List[Dict]: List of asset dictionaries
-            - HTTPException: 404 if no assets found
-            - HTTPException: 500 if Google Sheets error occurs
-    """
+    if "assets" in asset2_cache:
+        print("Cache hit for asset2")
+        return asset2_cache["assets"]
+    
+    print("Reading from Google Sheets for asset2")
     try:
         sheets = get_google_sheets_service()
         result = sheets.values().get(spreadsheetId=SPREADSHEET_ID, range=ASSET_SHEET_RANGE).execute()
@@ -261,7 +247,9 @@ async def read_assets():
         ]
         
         # กรองเฉพาะแถวที่ isDelete ไม่ใช่ 1
-        return [view for view in data if view.get("isDelete") != 1]
+        result = [view for view in data if view.get("isDelete") != 1]
+        asset2_cache["assets"] = result
+        return result
     
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
