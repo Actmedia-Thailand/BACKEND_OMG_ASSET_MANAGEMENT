@@ -282,7 +282,7 @@ async def read_assets(_: None = Depends(require_level(1))):
         # ฟังก์ชันสร้าง tree จาก children_map
         def build_tree(parent_id=""):
             tree = []
-            for node in children_map.get(parent_id, []):
+            for node in reversed(children_map.get(parent_id, [])):  # <-- reverse ที่นี่
                 node_copy = node.copy()
                 node_copy["subRows"] = build_tree(node["id"])
                 tree.append(node_copy)
