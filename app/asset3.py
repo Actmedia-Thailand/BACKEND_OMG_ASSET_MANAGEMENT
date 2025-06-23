@@ -43,7 +43,7 @@ from uuid import uuid4
 import json
 import asyncio
 from app.sheets_service import get_google_sheets_service
-from cachetools import TTLCache
+from .cache_manager import asset3_cache, clear_all_caches
 from collections import defaultdict
 from .user import require_level
 import os
@@ -211,9 +211,6 @@ def get_column_letter(col_index: int) -> str:
 
 # === CRUD Routes for Asset ===
 
-# In-memory cache 
-cache = TTLCache(maxsize=1, ttl=21600)  # Cache สูงสุด 1 item, หมดอายุใน 6 ชั่วโมง
-
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_assets(_: None = Depends(require_level(1))):
     """
@@ -229,9 +226,9 @@ async def read_assets(_: None = Depends(require_level(1))):
         7. Cache and return tree
     """
 
-    if "assets" in cache:
+    if "assets" in asset3_cache:
         print("Cache hit")
-        return cache["assets"]
+        return asset3_cache["assets"]
     print("Reading from Google Sheets")
     try:
         sheets = get_google_sheets_service()
@@ -292,7 +289,7 @@ async def read_assets(_: None = Depends(require_level(1))):
             return tree
 
         tree = build_tree()
-        cache["assets"] = tree
+        asset3_cache["assets"] = tree
         return tree
 
     except HttpError as e:
@@ -302,7 +299,7 @@ async def read_assets(_: None = Depends(require_level(1))):
 
 
 @router.post("/")
-async def create_asset(asset: Dict[str, Any],_: None = Depends(require_level(2))):
+async def create_asset(asset: Dict[str, Any], _: None = Depends(require_level(2))):
     """
         Create new asset in Google Sheets.
 
@@ -334,13 +331,13 @@ async def create_asset(asset: Dict[str, Any],_: None = Depends(require_level(2))
             valueInputOption="RAW",
             body={"values": [row_to_add]}
         ).execute()
-        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
+        clear_all_caches()  # เคลียร์แคชทั้งหมด
         return asset
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.put("/{asset_id}")
-async def update_asset(asset_id: str, updated_data: Dict[str, Any],_: None = Depends(require_level(2))):
+async def update_asset(asset_id: str, updated_data: Dict[str, Any], _: None = Depends(require_level(2))):
     """
         Update existing asset by ID.
 
@@ -399,13 +396,13 @@ async def update_asset(asset_id: str, updated_data: Dict[str, Any],_: None = Dep
                 spreadsheetId=SPREADSHEET_ID, 
                 body={"data": updates, "valueInputOption": "RAW"}
             ).execute()
-        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
+        clear_all_caches()  # เคลียร์แคชทั้งหมด
         return {"message": "Asset updated successfully"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.delete("/{asset_id}")
-async def delete_asset(asset_id: str,_: None = Depends(require_level(2))):
+async def delete_asset(asset_id: str, _: None = Depends(require_level(2))):
     """
         Soft delete asset by setting isDelete flag.
 
@@ -453,22 +450,12 @@ async def delete_asset(asset_id: str,_: None = Depends(require_level(2))):
             valueInputOption="RAW",
             body={"values": [[1]]}
         ).execute()
-        cache.clear()  # เพิ่มบรรทัดนี้เพื่อเคลียร์แคช (ใช้ชั่วคราว)
+        clear_all_caches()  # เคลียร์แคชทั้งหมด
         return {"message": "Asset marked as deleted"}
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.post("/clear-cache")
 async def clear_cache(_: None = Depends(require_level(3))):
-    """
-    Clear the in-memory cache.
-
-    **Process:**
-        1. Clear the TTLCache
-        2. Return success message
-
-    **Output:**
-        - Dict: Success message
-    """
-    cache.clear()
-    return {"message": "Cache cleared successfully"}
+    clear_all_caches()  # เคลียร์แคชทั้งหมด
+    return {"message": "All caches cleared successfully"}
