@@ -217,33 +217,27 @@ def create_access_token(data: dict, expires_delta: Optional[timedelta] = None):
 
 # Update the require_level function to use FastAPIRequest
 def require_level(min_level: int):
-    def dependency(request: Request): # เปลี่ยนเป็น Request เพื่อเข้าถึง .cookies
+    def dependency(request: FastAPIRequest):
         token = request.cookies.get("access_token")
         print(f"Token from cookie: {token}")
         if not token:
-            # ถ้าไม่มี token ให้ redirect ไปหน้าแรกของ frontend
-            # คุณอาจต้องเปลี่ยน URL นี้ให้เป็น URL จริงของหน้าแรก frontend ของคุณ
-            return RedirectResponse(url="/", status_code=302)
+            raise HTTPException(status_code=403, detail="Authentication required")
         try:
             payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
             print(f"Decoded payload: {payload}")
-            user_data = payload.get("user_data")
+            user_data = payload.get("user_data")  # เปลี่ยนจาก sub เป็น user_data
             if not user_data or "level" not in user_data:
-                # ถ้าข้อมูล token ไม่ถูกต้อง ก็ redirect
-                return RedirectResponse(url="/", status_code=302)
+                raise HTTPException(status_code=403, detail="Invalid token data")
             user_level = int(user_data["level"])
             print(f"User level: {user_level}, Required level: {min_level}")
             if user_level < min_level:
-                # ถ้า level ไม่ถึง ก็ redirect
-                return RedirectResponse(url="/", status_code=302)
+                raise HTTPException(status_code=403, detail="Insufficient permission level")
         except jwt.ExpiredSignatureError as e:
             print(f"Token expired error: {e}")
-            # ถ้า token หมดอายุ ก็ redirect
-            return RedirectResponse(url="/", status_code=302)
+            raise HTTPException(status_code=401, detail="Token expired")
         except jwt.InvalidTokenError as e:
             print(f"Invalid token error: {e}")
-            # ถ้า token ไม่ถูกต้อง ก็ redirect
-            return RedirectResponse(url="/", status_code=302)
+            raise HTTPException(status_code=401, detail="Invalid token")
     return dependency
 
 # === Routes ===
