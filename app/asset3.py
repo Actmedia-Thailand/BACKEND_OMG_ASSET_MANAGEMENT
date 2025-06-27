@@ -33,7 +33,7 @@
         * google-auth: Google authentication
         * google-api-python-client: Google Sheets API client
 """
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Body
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
@@ -452,6 +452,70 @@ async def delete_asset(asset_id: str, _: None = Depends(require_level(2))):
         ).execute()
         clear_all_caches()  # เคลียร์แคชทั้งหมด
         return {"message": "Asset marked as deleted"}
+    except HttpError as e:
+        raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
+
+@router.post("/bulk-update")
+async def bulk_update_assets(
+    payload: Dict[str, Any] = Body(...),
+    _: None = Depends(require_level(2))
+):
+    """
+    Bulk update assets by IDs.
+    Input:
+    {
+      "IDs": ["id1", "id2"],
+      "Bulk Update Assets": {
+        "status": "Available",
+        "Category": "Monitor"
+      }
+    }
+    """
+    try:
+        print("Bulk update payload:")
+        ids = payload.get("IDs", [])
+        updated_fields = payload.get("Bulk Update Assets", {})
+        if not ids or not updated_fields:
+            raise HTTPException(status_code=400, detail="IDs and Bulk Update Assets are required.")
+
+        sheets = get_google_sheets_service()
+        # Fetch all IDs from the sheet
+        id_column_index = HEADERS.index("id") + 1
+        id_column_letter = get_column_letter(id_column_index)
+        result = sheets.values().get(
+            spreadsheetId=SPREADSHEET_ID,
+            range=f"{ASSET_SHEET_RANGE}!{id_column_letter}:{id_column_letter}"
+        ).execute()
+        values = result.get("values", [])
+        if not values:
+            raise HTTPException(status_code=404, detail="No assets found")
+
+        # Prepare batch updates
+        batch_updates = []
+        for asset_id in ids:
+            row_number = binary_search_by_index(values, asset_id)
+            if row_number == -1:
+                continue  # skip if not found
+            for header, value in updated_fields.items():
+                if header in HEADERS:
+                    col_index = HEADERS.index(header) + 1
+                    col_letter = get_column_letter(col_index)
+                    cell_value = value if isinstance(value, (int, float)) else str(value)
+                    batch_updates.append({
+                        "range": f"{ASSET_SHEET_RANGE}!{col_letter}{row_number}",
+                        "values": [[cell_value]]
+                    })
+
+        if batch_updates:
+            sheets.values().batchUpdate(
+                spreadsheetId=SPREADSHEET_ID,
+                body={"data": batch_updates, "valueInputOption": "RAW"}
+            ).execute()
+            clear_all_caches()
+            return {"message": f"Updated {len(ids)} assets successfully."}
+        else:
+            return {"message": "No assets updated (IDs not found or no valid fields)."}
+
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
