@@ -42,6 +42,7 @@ from typing import List, Dict, Any
 from uuid import uuid4
 import json
 import asyncio
+import ast
 from app.sheets_service import get_google_sheets_service
 from .user import require_level
 import os
@@ -53,7 +54,7 @@ load_dotenv()  # Loads variables from .env into environment
 # === Configuration ===
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 VIEW_SHEET_RANGE = 'View'  #! Specify the range for the View sheet
-HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group", "isDelete", "createdOn"]
+HEADERS = ["id", "id_user", "data_type", "name", "levelView", "filters", "sorting", "group","pinning", "isDelete", "createdOn"]
 
 router = APIRouter()
 
@@ -201,23 +202,31 @@ def parse_value(value):
         **Process:**
 
             1. Try parsing as JSON for complex data types
-            2. Convert "1" and "0" to integers
-            3. Return original value if no conversion needed
+            2. Try parsing as Python literal (for dict/array in string)
+            3. Convert "1" and "0" to integers
+            4. Return original value if no conversion needed
             
         **Output:**
 
-            - dict/list: If value is valid JSON
+            - dict/list: If value is valid JSON or Python literal
             - int: If value is "1" or "0"
             - str: Original value if no conversion applies
     """
-    try:
-        return json.loads(value)
-    except (ValueError, TypeError):
-        if value == "1":
-            return 1
-        elif value == "0":
-            return 0
+    if isinstance(value, (dict, list, int, float)):
         return value
+    if value == "1":
+        return 1
+    if value == "0":
+        return 0
+    try:
+        # Try JSON first
+        return json.loads(value)
+    except Exception:
+        try:
+            # Try Python literal (e.g. "{'left': ['QR Code']}")
+            return ast.literal_eval(value)
+        except Exception:
+            return value
 
 @router.get("/", response_model=List[Dict[str, Any]])
 async def read_views(_: None = Depends(require_level(1))):
@@ -254,7 +263,6 @@ async def read_views(_: None = Depends(require_level(1))):
             {headers[i]: parse_value(cell) for i, cell in enumerate(row)}
             for row in values[1:]
         ]
-        
         return [view for view in data if view.get("isDelete") != 1]
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
