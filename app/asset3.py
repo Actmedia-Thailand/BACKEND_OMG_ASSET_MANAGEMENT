@@ -60,6 +60,9 @@ HEADERS = ["id", "QR Code", "MACADDRESS", "AssetTypeId", "AssetName", "Category"
 
 router = APIRouter()
 
+# Define numeric fields as a set for faster lookup
+NUMERIC_FIELDS = {"lastPlayerCommsMillis", "ProjectEnd", "ProjectStart"}
+
 # === Helper Functions ===
 
 async def update_headers_from_sheet():
@@ -239,25 +242,34 @@ async def read_assets(_: None = Depends(require_level(1))):
 
         headers = values[0]
 
-        def parse_value(value):
-            if value == "1":
-                return 1
-            if value == "0":
-                return 0
-            if value is None:
-                return ""
+        def parse_value(value, field_name=None):
+            """Parse and convert cell values from Google Sheets."""
+            # Handle empty values first
+            if value is None or value == "":
+                return None if field_name in NUMERIC_FIELDS else ""
+
+            # Quick return for common cases
+            if value == "1": return 1
+            if value == "0": return 0
+
+            # Handle numeric fields
+            if field_name in NUMERIC_FIELDS:
+                try:
+                    return float(value) if '.' in str(value) else int(value)
+                except (ValueError, TypeError):
+                    return None
+
+            # Handle other types
             if isinstance(value, str):
                 try:
                     parsed = json.loads(value)
-                    if isinstance(parsed, dict):
-                        return json.dumps(parsed, ensure_ascii=False)
                     return parsed
                 except (ValueError, TypeError):
                     return value
-            return str(value)
+            return value
 
         data = [
-            {headers[i]: parse_value(cell) for i, cell in enumerate(row) if i < len(headers)}
+            {headers[i]: parse_value(cell, headers[i]) for i, cell in enumerate(row) if i < len(headers)}
             for row in values[1:]
         ]
 
