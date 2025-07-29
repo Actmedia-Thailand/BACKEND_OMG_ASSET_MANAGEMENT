@@ -48,6 +48,7 @@ from collections import defaultdict
 from .user import require_level
 import os
 from dotenv import load_dotenv
+from typing import Union
 
 load_dotenv()  # Loads variables from .env into environment
 
@@ -311,40 +312,49 @@ async def read_assets(_: None = Depends(require_level(1))):
 
 
 @router.post("/")
-async def create_asset(asset: Dict[str, Any], _: None = Depends(require_level(2))):
+async def create_asset(assets: Union[Dict[str, Any], List[Dict[str, Any]]], _: None = Depends(require_level(2))):
     """
-        Create new asset in Google Sheets.
+    Create one or multiple new assets in Google Sheets.
 
-        **Input:**
-
-            - asset (Dict[str, Any]): Asset data in dictionary format
+    **Input:**
+        - assets: Single asset dict or list of asset dicts
             
-        **Process:**
-
-            1. Generate UUID for new asset
-            2. Add creation timestamp
-            3. Set isDelete flag to 0
-            4. Convert asset dict to row format
-            5. Append row to Google Sheets
+    **Process:**
+        1. Convert single asset to list if needed
+        2. Generate UUID for each new asset
+        3. Set isDelete flag to 0 for each
+        4. Convert assets to rows format
+        5. Append rows to Google Sheets
             
-        **Output:**
-
-            - Dict: Success message with new asset ID
-            - HTTPException: 500 if Google Sheets error occurs
+    **Output:**
+        - Dict/List: Created asset(s) with generated IDs
+        - HTTPException: 500 if Google Sheets error occurs
     """
-    asset["isDelete"] = 0  # Default to not deleted
-    asset["id"] = str(uuid4())
+    # Convert single asset to list
+    asset_list = assets if isinstance(assets, list) else [assets]
+    
     try:
         sheets = get_google_sheets_service()
-        row_to_add = [asset.get(header, "") for header in HEADERS]
+        rows_to_add = []
+        
+        # Process each asset
+        for asset in asset_list:
+            asset["isDelete"] = 0
+            asset["id"] = str(uuid4())
+            row = [asset.get(header, "") for header in HEADERS]
+            rows_to_add.append(row)
+
+        # Batch append all rows
         sheets.values().append(
             spreadsheetId=SPREADSHEET_ID,
             range=ASSET_SHEET_RANGE,
             valueInputOption="RAW",
-            body={"values": [row_to_add]}
+            body={"values": rows_to_add}
         ).execute()
-        clear_all_caches()  # เคลียร์แคชทั้งหมด
-        return asset
+        
+        clear_all_caches()
+        return asset_list if isinstance(assets, list) else asset_list[0]
+        
     except HttpError as e:
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
