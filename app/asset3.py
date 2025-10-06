@@ -542,6 +542,6 @@ async def bulk_update_assets(
         raise HTTPException(status_code=500, detail=f"Google Sheets error: {e}")
 
 @router.post("/clear-cache")
-async def clear_cache(_: None = Depends(require_level(3))):
+async def clear_cache():
     clear_all_caches()  # เคลียร์แคชทั้งหมด
     return {"message": "All caches cleared successfully"}
