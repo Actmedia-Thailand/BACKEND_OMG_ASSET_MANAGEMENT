@@ -56,7 +56,7 @@ load_dotenv()  # Loads variables from .env into environment
 SPREADSHEET_ID = os.getenv("SPREADSHEET_ID")
 ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
-HEADERS = ["id", "QR Code", "MACADDRESS", "AssetTypeId", "AssetName", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "ConnectVia", "wifiSsid", "ProjectName", "Phone", "DongleWifi", "parentId", "isDelete", "customStatus", "ProjectEnd", "ProjectStart", "sequenceId"]
+HEADERS = ["id", "QR Code", "MACADDRESS", "AssetTypeId", "AssetName", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "ConnectVia", "wifiSsid", "ProjectName", "Phone", "DongleWifi", "parentId", "isDelete", "customStatus", "ProjectEnd", "ProjectStart", "sequenceId","Serial Number"]
 """ list of headers in the Google Sheets document same as key of json file """
 
 router = APIRouter()

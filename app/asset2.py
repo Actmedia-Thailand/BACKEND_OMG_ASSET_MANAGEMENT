@@ -49,7 +49,7 @@ from .cache_manager import asset2_cache
 SPREADSHEET_ID = '1OaMBaxjFFlzZrIEkTA8dGdVeCZ_UaaWGc9EKbVpvkcM'  #! ควรเก็บใน ENV
 ASSET_SHEET_RANGE = 'Asset2'  #! ระบุช่วงข้อมูลใน Google Sheet สำหรับ Asset
 """ name of google sheet page """
-HEADERS = ["id", "QR Code", "MACADDRESS", "AssetTypeId", "AssetName", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "ConnectVia", "wifiSsid", "ProjectName", "Phone", "DongleWifi", "parentId", "isDelete", "customStatus", "ProjectEnd", "ProjectStart", "sequenceId"]
+HEADERS = ["id", "QR Code", "MACADDRESS", "AssetTypeId", "AssetName", "Category", "lastPlayerCommsMillis", "label", "storeLocation", "storeSection", "storeCode", "runNumber", "GroupID", "GroupName", "blackCondition", "retailer", "signageCategoryNameLocalised", "displaysConnected", "displayAspectRatio", "ConnectVia", "wifiSsid", "ProjectName", "Phone", "DongleWifi", "parentId", "isDelete", "customStatus", "ProjectEnd", "ProjectStart", "sequenceId","Serial Number"]
 """ list of headers in the Google Sheets document same as key of json file """
 
 router = APIRouter()
